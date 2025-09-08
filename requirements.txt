@@ -1,0 +1,25 @@
+# Core data processing
+pandas>=1.5.0
+numpy>=1.21.0
+scikit-learn>=1.1.0
+
+# GPU acceleration (PyTorch with Metal/CUDA support)
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# Large-scale processing
+pyspark>=3.4.0
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Visualization (optional but recommended)
+matplotlib>=3.5.0
+seaborn>=0.11.0
+plotly>=5.0.0
+
+# Utility packages
+pathlib2>=2.3.0
+tqdm>=4.64.0

@@ -1,0 +1,21 @@
+Device:
+  IBMQ:
+    qdevice: 'qiskit.ibmq'
+    qbackend: 'ibm_brussels'
+    shots: 1024
+
+  Simulator:
+    qdevice: 'default.qubit'
+    qbackend: ''
+
+Pretrain:
+  n_I: 2
+  suffix: 'CQ0715'
+
+Data:
+  num_data: 200
+  num_ptcs: 4
+  batch_size: 20
+
+Result:
+  output_dir: 'ibmq_result'

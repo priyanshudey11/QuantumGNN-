@@ -1,0 +1,56 @@
+Data:
+  batch_size: 256
+  max_num_ptcs: 16
+  min_num_ptcs: 4
+  num_test: 500
+  num_train: 2500
+  num_valid: 500
+  pt_threshold: 0.025
+JetNet:
+  dataset: JetNet
+  num_classes: 5
+  pt_max: 1200
+  pt_min: 800
+Performance:
+  benchmark_mode: true
+  cpu_worker_fraction: 0.8
+  gpu_memory_fraction: 0.8
+  num_workers: 16
+  pin_memory: true
+  use_mixed_precision: true
+Settings:
+  mode: '111'
+  print_log: true
+  suffix: ''
+  use_wandb: false
+TopQCD:
+  dataset: TopQCD
+  num_classes: 2
+  pt_max: 650
+  pt_min: 550
+Train:
+  ckpt_mode: max
+  ckpt_monitor: valid_auc
+  ckpt_top_k: 5
+  log_every_n_steps: 50
+  max_epochs: 4
+  num_sanity_val_steps: 0
+cpu: Unknown_CPU
+data_description: JetNet_P16_N2500
+dataset: JetNet
+date: '20251109_180150'
+dropout: 0.0
+gpu: NVIDIA_GeForce_RTX_3080
+group_rnd: QuantumRotQCGNN-nI4_nQ6_L2_R2_D0.00-JetNet_P16_N2500
+lr: 0.001
+model: QuantumRotQCGNN
+model_description: nI4_nQ6_L2_R2_D0.00
+name: QuantumRotQCGNN-nI4_nQ6_L2_R2_D0.00-JetNet_P16_N2500-42
+num_cpu_cores: 24
+num_ir_qubits: 4
+num_layers: 2
+num_nr_qubits: 6
+num_reupload: 2
+num_threads: 12
+random_seed: 42
+vqc_ansatz: !!python/name:pennylane.templates.layers.strongly_entangling.StronglyEntanglingLayers ''

@@ -286,7 +286,7 @@ jupyter notebook tutorial.ipynb
 
 ## 📚 Documentation
 
-- **README**: `DRUG_PATIENT_PIPELINE_README.md` (cleaned up, no "Claude Code" references)
+- **README**: `DRUG_PATIENT_PIPELINE_README.md` 
 - **Dataset Notes**: `DATASET_NOTES.md` (explains your PPI dataset)
 - **This Summary**: `IMPLEMENTATION_SUMMARY.md`
 - **Tutorial**: `tutorial.ipynb` (complete walkthrough)

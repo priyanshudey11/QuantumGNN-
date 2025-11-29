@@ -1,65 +1,68 @@
 """
-Drug-Patient Interaction Pipeline with Quantum GNN
+Drug-Protein Interaction Pipeline with Quantum GNN
 
-A comprehensive pipeline for predicting drug-patient interactions using
-quantum graph neural networks (QGNN). This system combines molecular drug
-features from protein-ligand binding data with patient characteristics to
-predict treatment outcomes.
+A comprehensive pipeline for predicting drug-protein interactions using
+quantum graph neural networks (QGNN). This system combines molecular ligand
+features with protein pocket descriptors from binding data to predict
+ligand-protein binding and interaction types.
 
 Main Components:
-- DrugPatientDataProcessor: Load and process drug-patient data
-- QuantumDrugPatientGNN: Quantum GNN model for interaction prediction
-- DrugPatientTrainer: Training and evaluation utilities
-- PatientFeatures: Patient data structure
-- DrugPatientInteraction: Interaction data structure
+- DrugProteinDataProcessor: Load and process drug-protein data
+- QuantumDrugProteinGNN: Quantum GNN model for interaction prediction
+- DrugProteinTrainer: Training and evaluation utilities
+- ProteinPocketFeatures: Protein pocket data structure
+- DrugProteinInteraction: Interaction data structure
 
 Example:
     >>> from drug_patient_qgnn import (
-    ...     DrugPatientDataProcessor,
-    ...     QuantumDrugPatientGNN,
-    ...     DrugPatientTrainer
+    ...     DrugProteinDataProcessor,
+    ...     QuantumDrugProteinGNN,
+    ...     DrugProteinTrainer
     ... )
     >>>
     >>> # Load data
-    >>> processor = DrugPatientDataProcessor(data_dir="othercode/data")
+    >>> processor = DrugProteinDataProcessor(data_dir="/media/priyanshu/SD/othercode/data")
     >>> processor.load_protein_ligand_data(max_samples=100)
-    >>> processor.create_synthetic_patient_data(n_patients=200)
+    >>> processor.create_synthetic_ligand_data(n_ligands=100)
     >>> processor.create_synthetic_interactions(interaction_rate=0.05)
     >>>
     >>> # Create model
     >>> graph = processor.graph
-    >>> model = QuantumDrugPatientGNN(
-    ...     drug_dim=graph.get_drug_features_matrix().shape[1],
-    ...     patient_dim=graph.get_patient_features_matrix().shape[1],
+    >>> model = QuantumDrugProteinGNN(
+    ...     ligand_dim=graph.get_ligand_features_matrix().shape[1],
+    ...     pocket_dim=graph.get_pocket_features_matrix().shape[1],
     ...     num_qubits=4,
     ...     num_qlayers=2,
     ...     use_quantum=True
     ... )
     >>>
     >>> # Train
-    >>> trainer = DrugPatientTrainer(model, learning_rate=0.001)
+    >>> trainer = DrugProteinTrainer(model, learning_rate=0.001)
     >>> trainer.fit(graph, epochs=100, val_split=0.2)
 """
 
-__version__ = "0.1.0"
-__author__ = "Drug-Patient QGNN Team"
+__version__ = "0.2.0"
+__author__ = "Drug-Protein QGNN Team"
 __license__ = "MIT"
 
 # Import main classes
 from .data_processing import (
-    PatientFeatures,
-    DrugPatientInteraction,
+    ProteinPocketFeatures,
+    LigandFeatures,
+    DrugProteinInteraction,
     BipartiteGraph,
-    DrugPatientDataProcessor
+    DrugProteinDataProcessor
 )
 
 from .model import (
-    QuantumDrugPatientGNN,
+    QuantumDrugProteinGNN,
     QuantumInteractionLayer,
     ClassicalInteractionLayer
 )
 
-from .trainer import DrugPatientTrainer
+from .trainer import (
+    DrugProteinTrainer
+)
 
 from .utils import (
     set_seed,
@@ -76,15 +79,16 @@ from .utils import (
 
 # Define public API
 __all__ = [
-    # Data structures
-    'PatientFeatures',
-    'DrugPatientInteraction',
+    # New data structures (drug-protein paradigm)
+    'ProteinPocketFeatures',
+    'LigandFeatures',
+    'DrugProteinInteraction',
     'BipartiteGraph',
 
-    # Main classes
-    'DrugPatientDataProcessor',
-    'QuantumDrugPatientGNN',
-    'DrugPatientTrainer',
+    # Main classes (new names)
+    'DrugProteinDataProcessor',
+    'QuantumDrugProteinGNN',
+    'DrugProteinTrainer',
 
     # Model components (advanced usage)
     'QuantumInteractionLayer',
@@ -101,4 +105,19 @@ __all__ = [
     'get_device_info',
     'print_device_info',
     'estimate_training_time',
+
+    # Backward compatibility (deprecated)
+    'PatientFeatures',
+    'DrugPatientInteraction',
+    'DrugPatientDataProcessor',
+    'QuantumDrugPatientGNN',
+    'DrugPatientTrainer',
 ]
+
+# Create backward compatibility aliases (deprecated, will be removed in v1.0)
+# These map old patient-based names to new protein-based implementations
+PatientFeatures = ProteinPocketFeatures
+DrugPatientInteraction = DrugProteinInteraction
+DrugPatientDataProcessor = DrugProteinDataProcessor
+QuantumDrugPatientGNN = QuantumDrugProteinGNN
+DrugPatientTrainer = DrugProteinTrainer

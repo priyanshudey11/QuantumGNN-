@@ -1,11 +1,11 @@
 """
-Data processing module for Drug-Patient QGNN Pipeline.
+Data processing module for Drug-Protein QGNN Pipeline.
 
 This module provides:
-- PatientFeatures: Data class for patient clinical/genetic information
-- DrugPatientInteraction: Data class for drug-patient interaction records
-- BipartiteGraph: Bipartite graph representation with drug and patient nodes
-- DrugPatientDataProcessor: Main data loading and processing class
+- ProteinPocketFeatures: Data class for protein pocket 3D descriptors
+- DrugProteinInteraction: Data class for drug-protein interaction records
+- BipartiteGraph: Bipartite graph representation with ligand and protein pocket nodes
+- DrugProteinDataProcessor: Main data loading and processing class
 """
 
 from dataclasses import dataclass, field
@@ -17,145 +17,259 @@ import numpy as np
 import pandas as pd
 import torch
 from pathlib import Path
+from tqdm import tqdm
 
 
 @dataclass
-class PatientFeatures:
-    """Patient clinical and genetic features.
+class ProteinPocketFeatures:
+    """Protein pocket 3D geometric and atom-type features.
 
     Attributes:
-        patient_id: Unique patient identifier
-        age: Patient age (18-100 years)
-        sex: Binary sex (0=Female, 1=Male)
-        weight: Body weight in kg
-        genetic_markers: Array of genetic markers (SNPs, gene expression)
-        comorbidities: Binary array for comorbidities (diabetes, hypertension, etc.)
-        lab_values: Array of lab test results (glucose, creatinine, etc.)
-        prior_medications: Array of medication history indicators
+        pocket_id: Unique pocket identifier (e.g., PDB_chain_pocket)
+        pocket_type: Type of pocket (PLOC, PLONC, PLA, HD)
+        volume: Pocket volume
+        pmi1, pmi2, pmi3: Principal moments of inertia
+        npr1, npr2: Normalized principal moments ratios
+        rgyr: Radius of gyration
+        asphericity: Asphericity measure
+        spherocity_index: Spherocity index
+        eccentricity: Eccentricity measure
+        inertial_shape_factor: Inertial shape factor
+        atom_type_counts: Dictionary of atom type counts (CZ, CA, O, etc.)
+        additional_features: Optional additional descriptor values
     """
-    patient_id: str
-    age: float
-    sex: int
-    weight: float
-    genetic_markers: np.ndarray
-    comorbidities: np.ndarray
-    lab_values: np.ndarray
-    prior_medications: np.ndarray
+    pocket_id: str
+    pocket_type: str = "unknown"  # PLOC, PLONC, PLA, HD
+    volume: float = 0.0
+    pmi1: float = 0.0
+    pmi2: float = 0.0
+    pmi3: float = 0.0
+    npr1: float = 0.0
+    npr2: float = 0.0
+    rgyr: float = 0.0
+    asphericity: float = 0.0
+    spherocity_index: float = 0.0
+    eccentricity: float = 0.0
+    inertial_shape_factor: float = 0.0
+    atom_type_counts: Dict[str, float] = field(default_factory=dict)
+    additional_features: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def to_vector(self) -> np.ndarray:
-        """Convert patient features to a single feature vector."""
-        return np.concatenate([
-            [self.age, self.sex, self.weight],
-            self.genetic_markers.flatten(),
-            self.comorbidities.flatten(),
-            self.lab_values.flatten(),
-            self.prior_medications.flatten()
+        """Convert pocket features to a single feature vector."""
+        # Core geometric descriptors
+        geometric = np.array([
+            self.volume, self.pmi1, self.pmi2, self.pmi3,
+            self.npr1, self.npr2, self.rgyr, self.asphericity,
+            self.spherocity_index, self.eccentricity, self.inertial_shape_factor
         ])
+
+        # Atom type counts (in consistent order)
+        atom_types = ['CZ', 'CA', 'O', 'OD1', 'OG', 'N', 'NZ', 'DU']
+        atom_counts = np.array([self.atom_type_counts.get(at, 0.0) for at in atom_types])
+
+        # Combine all features
+        features = np.concatenate([geometric, atom_counts])
+
+        if len(self.additional_features) > 0:
+            features = np.concatenate([features, self.additional_features])
+
+        return features
+
+
+class SimpleMol2Parser:
+    """Simple parser for MOL2 files to extract basic chemical features."""
+    
+    ATOM_WEIGHTS = {
+        'C': 12.01, 'N': 14.01, 'O': 16.00, 'S': 32.06, 'P': 30.97,
+        'F': 19.00, 'Cl': 35.45, 'Br': 79.90, 'I': 126.90, 'H': 1.008
+    }
+    
+    @staticmethod
+    def parse(filepath: str) -> 'LigandFeatures':
+        """Parse a MOL2 file and return LigandFeatures."""
+        atom_counts = {atom: 0 for atom in SimpleMol2Parser.ATOM_WEIGHTS}
+        mol_weight = 0.0
+        
+        try:
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+            
+            in_atom_section = False
+            
+            for line in lines:
+                line = line.strip()
+                if line == "@<TRIPOS>ATOM":
+                    in_atom_section = True
+                    continue
+                elif line.startswith("@<TRIPOS>"):
+                    in_atom_section = False
+                
+                if in_atom_section:
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        atom_type_full = parts[5]
+                        atom_type = atom_type_full.split('.')[0] if '.' in atom_type_full else atom_type_full
+                        
+                        # Normalize atom type
+                        if atom_type in SimpleMol2Parser.ATOM_WEIGHTS:
+                            atom_counts[atom_type] += 1
+                            mol_weight += SimpleMol2Parser.ATOM_WEIGHTS[atom_type]
+                        elif atom_type == 'H': # Handle H explicit if present
+                             atom_counts['H'] += 1
+                             mol_weight += SimpleMol2Parser.ATOM_WEIGHTS['H']
+
+        except Exception as e:
+            print(f"Error parsing {filepath}: {e}")
+            
+        return LigandFeatures(
+            ligand_id=Path(filepath).stem,
+            molecular_weight=mol_weight,
+            atom_counts=atom_counts
+        )
+
+@dataclass
+class LigandFeatures:
+    """Ligand (drug) molecular features.
+
+    Attributes:
+        ligand_id: Unique ligand identifier
+        molecular_weight: Molecular weight in Da
+        atom_counts: Dictionary of atom counts
+        additional_features: Optional additional descriptor values
+    """
+    ligand_id: str
+    molecular_weight: float = 0.0
+    atom_counts: Dict[str, int] = field(default_factory=dict)
+    additional_features: np.ndarray = field(default_factory=lambda: np.array([]))
+
+    def to_vector(self) -> np.ndarray:
+        """Convert ligand features to a single feature vector."""
+        # Atom types to include in vector (consistent order)
+        atom_types = ['C', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I', 'H']
+        
+        counts = np.array([self.atom_counts.get(at, 0) for at in atom_types], dtype=np.float32)
+        
+        features = np.concatenate([
+            np.array([self.molecular_weight], dtype=np.float32),
+            counts
+        ])
+
+        if len(self.additional_features) > 0:
+            features = np.concatenate([features, self.additional_features])
+
+        return features
 
 
 @dataclass
-class DrugPatientInteraction:
-    """Drug-patient interaction record.
+class DrugProteinInteraction:
+    """Drug-protein interaction record.
 
     Attributes:
-        drug_id: Drug/ligand identifier
-        patient_id: Patient identifier
-        efficacy: Treatment efficacy (0-1 scale)
-        adverse_events: List of adverse event names
-        dose: Dose in mg
-        duration: Treatment duration in days
-        outcome: Binary outcome (0=failure, 1=success)
+        ligand_id: Ligand/drug identifier
+        pocket_id: Protein pocket identifier
+        interaction_type: Type of interaction (PLOC, PLONC, PLA, HD/negative)
+        binding_affinity: Binding affinity (if available, in kcal/mol)
+        distance: Distance metric (if available)
+        outcome: Binary outcome (0=no binding/HD, 1=binding)
     """
-    drug_id: str
-    patient_id: str
-    efficacy: float
-    adverse_events: List[str]
-    dose: float
-    duration: float
-    outcome: int
+    ligand_id: str
+    pocket_id: str
+    interaction_type: str  # PLOC, PLONC, PLA, HD
+    binding_affinity: Optional[float] = None
+    distance: Optional[float] = None
+    outcome: int = 1  # 1 for binding (PLOC/PLONC/PLA), 0 for non-binding (HD)
 
     def to_edge_features(self) -> np.ndarray:
         """Convert interaction to edge feature vector."""
         return np.array([
-            self.efficacy,
-            self.dose,
-            self.duration,
             float(self.outcome),
-            float(len(self.adverse_events))
+            self.binding_affinity if self.binding_affinity is not None else 0.0,
+            self.distance if self.distance is not None else 0.0,
+            float(['HD', 'PLOC', 'PLONC', 'PLA'].index(self.interaction_type)
+                  if self.interaction_type in ['HD', 'PLOC', 'PLONC', 'PLA'] else 0)
         ])
 
 
 class BipartiteGraph:
-    """Bipartite graph structure for drug-patient interactions.
+    """Bipartite graph structure for drug-protein interactions.
 
     The graph consists of:
-    - Drug nodes with molecular features
-    - Patient nodes with clinical features
+    - Ligand (drug) nodes with molecular features
+    - Protein pocket nodes with 3D geometric features
     - Edges representing interactions with features
 
     Attributes:
-        drug_nodes: Dict mapping drug_id to feature vector
-        patient_nodes: Dict mapping patient_id to PatientFeatures
-        edges: List of (drug_id, patient_id, edge_features) tuples
-        drug_id_to_idx: Mapping from drug_id to node index
-        patient_id_to_idx: Mapping from patient_id to node index
+        ligand_nodes: Dict mapping ligand_id to feature vector
+        pocket_nodes: Dict mapping pocket_id to ProteinPocketFeatures
+        edges: List of (ligand_id, pocket_id, edge_features) tuples
+        ligand_id_to_idx: Mapping from ligand_id to node index
+        pocket_id_to_idx: Mapping from pocket_id to node index
     """
 
     def __init__(self):
-        self.drug_nodes: Dict[str, np.ndarray] = {}
-        self.patient_nodes: Dict[str, PatientFeatures] = {}
+        self.ligand_nodes: Dict[str, np.ndarray] = {}
+        self.pocket_nodes: Dict[str, ProteinPocketFeatures] = {}
         self.edges: List[Tuple[str, str, np.ndarray]] = []
-        self.drug_id_to_idx: Dict[str, int] = {}
-        self.patient_id_to_idx: Dict[str, int] = {}
+        self.ligand_id_to_idx: Dict[str, int] = {}
+        self.pocket_id_to_idx: Dict[str, int] = {}
 
-    def add_drug(self, drug_id: str, features: np.ndarray):
-        """Add a drug node to the graph."""
-        if drug_id not in self.drug_nodes:
-            self.drug_id_to_idx[drug_id] = len(self.drug_nodes)
-            self.drug_nodes[drug_id] = features
+    def add_ligand(self, ligand_id: str, features: np.ndarray):
+        """Add a ligand node to the graph."""
+        if ligand_id not in self.ligand_nodes:
+            self.ligand_id_to_idx[ligand_id] = len(self.ligand_nodes)
+            self.ligand_nodes[ligand_id] = features
 
-    def add_patient(self, patient: PatientFeatures):
-        """Add a patient node to the graph."""
-        if patient.patient_id not in self.patient_nodes:
-            self.patient_id_to_idx[patient.patient_id] = len(self.patient_nodes)
-            self.patient_nodes[patient.patient_id] = patient
+    def add_pocket(self, pocket: ProteinPocketFeatures):
+        """Add a protein pocket node to the graph."""
+        if pocket.pocket_id not in self.pocket_nodes:
+            self.pocket_id_to_idx[pocket.pocket_id] = len(self.pocket_nodes)
+            self.pocket_nodes[pocket.pocket_id] = pocket
 
-    def add_edge(self, drug_id: str, patient_id: str, edge_features: np.ndarray):
-        """Add an edge (interaction) between drug and patient."""
-        if drug_id not in self.drug_nodes:
-            raise ValueError(f"Drug {drug_id} not found in graph")
-        if patient_id not in self.patient_nodes:
-            raise ValueError(f"Patient {patient_id} not found in graph")
-        self.edges.append((drug_id, patient_id, edge_features))
+    def add_edge(self, ligand_id: str, pocket_id: str, edge_features: np.ndarray):
+        """Add an edge (interaction) between ligand and pocket."""
+        if ligand_id not in self.ligand_nodes:
+            raise ValueError(f"Ligand {ligand_id} not found in graph")
+        if pocket_id not in self.pocket_nodes:
+            raise ValueError(f"Pocket {pocket_id} not found in graph")
+        self.edges.append((ligand_id, pocket_id, edge_features))
 
+    def get_ligand_features_matrix(self) -> np.ndarray:
+        """Get ligand node features as matrix (num_ligands, ligand_dim)."""
+        ligand_ids = sorted(self.ligand_nodes.keys(), key=lambda x: self.ligand_id_to_idx[x])
+        return np.stack([self.ligand_nodes[ligand_id] for ligand_id in ligand_ids])
+
+    def get_pocket_features_matrix(self) -> np.ndarray:
+        """Get pocket node features as matrix (num_pockets, pocket_dim)."""
+        pocket_ids = sorted(self.pocket_nodes.keys(), key=lambda x: self.pocket_id_to_idx[x])
+        return np.stack([self.pocket_nodes[pid].to_vector() for pid in pocket_ids])
+
+    # Backward compatibility aliases
     def get_drug_features_matrix(self) -> np.ndarray:
-        """Get drug node features as matrix (num_drugs, drug_dim)."""
-        drug_ids = sorted(self.drug_nodes.keys(), key=lambda x: self.drug_id_to_idx[x])
-        return np.stack([self.drug_nodes[drug_id] for drug_id in drug_ids])
+        """Alias for get_ligand_features_matrix() for backward compatibility."""
+        return self.get_ligand_features_matrix()
 
     def get_patient_features_matrix(self) -> np.ndarray:
-        """Get patient node features as matrix (num_patients, patient_dim)."""
-        patient_ids = sorted(self.patient_nodes.keys(), key=lambda x: self.patient_id_to_idx[x])
-        return np.stack([self.patient_nodes[pid].to_vector() for pid in patient_ids])
+        """Alias for get_pocket_features_matrix() for backward compatibility."""
+        return self.get_pocket_features_matrix()
 
     def get_edge_index(self) -> Tuple[np.ndarray, np.ndarray]:
         """Get edge index in PyTorch Geometric format.
 
         Returns:
             Tuple of (edge_index, edge_features) where:
-            - edge_index: (2, num_edges) array of [drug_idx, patient_idx]
+            - edge_index: (2, num_edges) array of [ligand_idx, pocket_idx]
             - edge_features: (num_edges, edge_dim) array
         """
         if len(self.edges) == 0:
-            return np.zeros((2, 0), dtype=np.int64), np.zeros((0, 5))
+            return np.zeros((2, 0), dtype=np.int64), np.zeros((0, 4))
 
         edge_list = []
         edge_features = []
 
-        for drug_id, patient_id, features in self.edges:
-            drug_idx = self.drug_id_to_idx[drug_id]
-            patient_idx = self.patient_id_to_idx[patient_id]
-            edge_list.append([drug_idx, patient_idx])
+        for ligand_id, pocket_id, features in self.edges:
+            ligand_idx = self.ligand_id_to_idx[ligand_id]
+            pocket_idx = self.pocket_id_to_idx[pocket_id]
+            edge_list.append([ligand_idx, pocket_idx])
             edge_features.append(features)
 
         edge_index = np.array(edge_list).T  # (2, num_edges)
@@ -165,32 +279,41 @@ class BipartiteGraph:
 
     def get_edge_labels(self) -> np.ndarray:
         """Get edge outcome labels (0 or 1)."""
-        return np.array([features[3] for _, _, features in self.edges])
+        return np.array([features[0] for _, _, features in self.edges])
 
+    def num_ligands(self) -> int:
+        """Number of ligand nodes."""
+        return len(self.ligand_nodes)
+
+    def num_pockets(self) -> int:
+        """Number of protein pocket nodes."""
+        return len(self.pocket_nodes)
+
+    # Backward compatibility aliases
     def num_drugs(self) -> int:
-        """Number of drug nodes."""
-        return len(self.drug_nodes)
+        """Alias for num_ligands() for backward compatibility."""
+        return self.num_ligands()
 
     def num_patients(self) -> int:
-        """Number of patient nodes."""
-        return len(self.patient_nodes)
+        """Alias for num_pockets() for backward compatibility."""
+        return self.num_pockets()
 
     def num_edges(self) -> int:
         """Number of edges (interactions)."""
         return len(self.edges)
 
 
-class DrugPatientDataProcessor:
-    """Main data processor for drug-patient interaction data.
+class DrugProteinDataProcessor:
+    """Main data processor for drug-protein interaction data.
 
     This class handles:
-    - Loading 3D molecular descriptors from PDB data
-    - Creating/loading patient data
+    - Loading 3D pocket descriptors from PDB data
+    - Creating/loading ligand data
     - Creating/loading interaction data
     - Building bipartite graph representation
 
     Args:
-        data_dir: Path to directory containing PDB data (default: othercode/data)
+        data_dir: Path to directory containing PDB data (default: /media/priyanshu/SD/othercode/data)
         seed: Random seed for reproducibility
     """
 
@@ -201,208 +324,190 @@ class DrugPatientDataProcessor:
         self._rng = np.random.RandomState(seed)
 
         # Track loaded data
-        self._drug_descriptors_loaded = False
-        self._patients_loaded = False
+        self._pockets_loaded = False
+        self._ligands_loaded = False
 
-    def load_protein_ligand_data(self, max_samples: Optional[int] = None) -> int:
-        """Load 3D molecular descriptors from PDB CSV files.
-
-        Searches for files matching pattern:
-        {data_dir}/**/results/**/*_descriptors_3d.csv
-
+    def load_real_data(self, data_dir: str, max_samples: Optional[int] = None) -> Dict[str, int]:
+        """
+        Loads real Protein (Pocket) and Drug (Ligand) data from the filesystem.
+        
         Args:
-            max_samples: Maximum number of drug samples to load (None = all)
-
+            data_dir: Base directory containing PDB results
+            max_samples: Maximum number of samples to load (None for all)
+            
         Returns:
-            Number of drug nodes loaded
+            Dictionary with counts of loaded nodes and edges
         """
-        # Search for descriptor CSV files (including subdirectories under results/)
-        pattern = os.path.join(self.data_dir, "**", "results", "**", "*_descriptors_3d.csv")
+        print(f"Searching for data in: {data_dir}")
+        
+        # Find all descriptor CSV files (Protein Pockets)
+        pattern = os.path.join(data_dir, "**", "results", "**", "*_descriptors_3d.csv")
         csv_files = glob.glob(pattern, recursive=True)
-
-        # Filter out hidden files (starting with .)
-        csv_files = [f for f in csv_files if not os.path.basename(f).startswith('.')]
-
-        if len(csv_files) == 0:
-            print(f"Warning: No descriptor CSV files found in {self.data_dir}")
-            print(f"Searched pattern: {pattern}")
-            return 0
-
-        print(f"Found {len(csv_files)} descriptor files")
-
-        drug_count = 0
-        for csv_file in csv_files[:max_samples] if max_samples else csv_files:
+        
+        if max_samples:
+            csv_files = csv_files[:max_samples]
+            
+        print(f"Found {len(csv_files)} protein descriptor files")
+        
+        loaded_proteins = 0
+        loaded_drugs = 0
+        interactions = 0
+        
+        # Track existing interactions to avoid duplicates when generating negatives
+        existing_interactions = set()
+        
+        # Columns expected in CSV
+        descriptor_cols = [
+            'Volume', 'PMI1', 'PMI2', 'PMI3', 'NPR1', 'NPR2',
+            'Rgyr', 'Asphericity', 'SpherocityIndex', 'Eccentricity',
+            'InertialShapeFactor'
+        ]
+        atom_cols = ['CZ', 'CA', 'O', 'OD1', 'OG', 'N', 'NZ', 'DU']
+        
+        # Lists to keep track of loaded IDs for negative sampling
+        all_protein_ids = []
+        all_drug_ids = []
+        
+        for csv_file in tqdm(csv_files, desc="Loading PDB Data"):
             try:
+                # 1. Load Protein Pocket (from CSV)
                 df = pd.read_csv(csv_file)
-
-                # Extract 3D descriptor columns
-                descriptor_cols = [
-                    'Volume', 'PMI1', 'PMI2', 'PMI3', 'NPR1', 'NPR2',
-                    'Rgyr', 'Asphericity', 'SpherocityIndex', 'Eccentricity',
-                    'InertialShapeFactor'
-                ]
-
-                # Add atom type counts if available
-                atom_cols = ['CZ', 'CA', 'O', 'OD1', 'OG', 'N', 'NZ', 'DU']
-                available_atom_cols = [col for col in atom_cols if col in df.columns]
-
-                all_cols = descriptor_cols + available_atom_cols
-                available_cols = [col for col in all_cols if col in df.columns]
-
-                if len(available_cols) == 0:
-                    print(f"Warning: No valid descriptor columns in {csv_file}")
+                if df.empty:
                     continue
-
-                # Extract features (use first row if multiple)
-                features = df[available_cols].iloc[0].values.astype(np.float32)
-
-                # Handle missing values
-                features = np.nan_to_num(features, nan=0.0)
-
-                # Create drug ID from filename
-                drug_id = Path(csv_file).stem  # e.g., "1a0n--A--P27986__Repair-H_descriptors_3d"
-
-                self.graph.add_drug(drug_id, features)
-                drug_count += 1
-
+                
+                # Check for required columns
+                if not all(col in df.columns for col in descriptor_cols):
+                    continue
+                    
+                row = df.iloc[0]
+                
+                # Create ProteinPocketFeatures object
+                protein_id = Path(csv_file).stem.replace("_descriptors_3d", "")
+                pocket = ProteinPocketFeatures(pocket_id=protein_id)
+                
+                # Populate geometric features
+                pocket.volume = float(row.get('Volume', 0.0))
+                pocket.pmi1 = float(row.get('PMI1', 0.0))
+                pocket.pmi2 = float(row.get('PMI2', 0.0))
+                pocket.pmi3 = float(row.get('PMI3', 0.0))
+                pocket.npr1 = float(row.get('NPR1', 0.0))
+                pocket.npr2 = float(row.get('NPR2', 0.0))
+                pocket.rgyr = float(row.get('Rgyr', 0.0))
+                pocket.asphericity = float(row.get('Asphericity', 0.0))
+                pocket.spherocity_index = float(row.get('SpherocityIndex', 0.0))
+                pocket.eccentricity = float(row.get('Eccentricity', 0.0))
+                pocket.inertial_shape_factor = float(row.get('InertialShapeFactor', 0.0))
+                
+                # Populate atom counts
+                for atom_type in atom_cols:
+                    if atom_type in row:
+                        pocket.atom_type_counts[atom_type] = float(row[atom_type])
+                
+                self.graph.add_pocket(pocket)
+                loaded_proteins += 1
+                all_protein_ids.append(protein_id)
+                
+                # 2. Find associated Drugs/Ligands (MOL2 files in same dir)
+                parent_dir = Path(csv_file).parent
+                mol2_files = list(parent_dir.glob("*.mol2"))
+                
+                # Filter out hidden files
+                mol2_files = [f for f in mol2_files if not f.name.startswith('.')]
+                
+                for mol2_file in mol2_files:
+                    drug_id = mol2_file.stem
+                    
+                    # Create Drug Node
+                    # Parse MOL2 file to get real features
+                    ligand_features = SimpleMol2Parser.parse(str(mol2_file))
+                    drug_features = ligand_features.to_vector()
+                    
+                    self.graph.add_ligand(drug_id, drug_features)
+                    loaded_drugs += 1
+                    all_drug_ids.append(drug_id)
+                    
+                    # 3. Create Interaction (Positive)
+                    # In this dataset, co-location implies interaction (complex)
+                    # We assume a positive interaction (label=1) for the crystal structure
+                    edge_features = np.array([1.0, 0.0, 0.0, 0.0])
+                    self.graph.add_edge(drug_id, protein_id, edge_features)
+                    interactions += 1
+                    existing_interactions.add((drug_id, protein_id))
+                    
             except Exception as e:
-                print(f"Warning: Failed to load {csv_file}: {e}")
+                # print(f"Error loading {csv_file}: {e}")
                 continue
+        
+        # 4. Generate Negative Interactions (Optimized)
+        # We aim for a 1:1 ratio of positive to negative samples
+        print(f"Generating negative samples (target: {interactions})...")
+        negatives_generated = 0
+        
+        if loaded_proteins > 0 and loaded_drugs > 0:
+            # Convert lists to numpy arrays for faster sampling
+            all_drug_ids_np = np.array(all_drug_ids)
+            all_protein_ids_np = np.array(all_protein_ids)
+            
+            # Generate candidate pairs in batches
+            batch_size = 10000
+            
+            with tqdm(total=interactions, desc="Generating Negatives") as pbar:
+                while negatives_generated < interactions:
+                    # Generate random indices
+                    drug_indices = self._rng.randint(0, len(all_drug_ids_np), size=batch_size)
+                    protein_indices = self._rng.randint(0, len(all_protein_ids_np), size=batch_size)
+                    
+                    batch_drugs = all_drug_ids_np[drug_indices]
+                    batch_proteins = all_protein_ids_np[protein_indices]
+                    
+                    for d_id, p_id in zip(batch_drugs, batch_proteins):
+                        if negatives_generated >= interactions:
+                            break
+                            
+                        # Check if interaction already exists
+                        if (d_id, p_id) not in existing_interactions:
+                            # Add negative interaction (label=0.0)
+                            edge_features = np.array([0.0, 0.0, 0.0, 0.0])
+                            self.graph.add_edge(d_id, p_id, edge_features)
+                            existing_interactions.add((d_id, p_id))
+                            
+                            negatives_generated += 1
+                            pbar.update(1)
+            
+        self._pockets_loaded = True
+        self._ligands_loaded = True
+        
+        total_interactions = interactions + negatives_generated
+        print(f"Loaded {loaded_proteins} proteins, {loaded_drugs} drugs")
+        print(f"Interactions: {interactions} positive, {negatives_generated} negative (Total: {total_interactions})")
+        
+        return {
+            "proteins": loaded_proteins,
+            "drugs": loaded_drugs,
+            "interactions": total_interactions,
+            "positives": interactions,
+            "negatives": negatives_generated
+        }
 
-        self._drug_descriptors_loaded = True
-        print(f"Loaded {drug_count} drug nodes")
-        return drug_count
+    def load_protein_ligand_data(self, *args, **kwargs):
+        """Deprecated method."""
+        raise RuntimeError("This method is deprecated. Use load_real_data() instead.")
 
-    def create_synthetic_patient_data(
-        self,
-        n_patients: int = 200,
-        n_genetic_markers: int = 10,
-        n_comorbidities: int = 5,
-        n_lab_values: int = 8,
-        n_medications: int = 15
-    ):
-        """Generate synthetic patient data for testing.
+    def load_drug_data_from_pdb(self, *args, **kwargs):
+        """Deprecated method."""
+        raise RuntimeError("This method is deprecated. Use load_real_data() instead.")
 
-        Generates realistic synthetic patient features with:
-        - Age: Normal(55, 15) clipped to [18, 100]
-        - Sex: Bernoulli(0.5)
-        - Weight: Normal(75, 15) clipped to [40, 150]
-        - Genetic markers: Uniform[0, 1]
-        - Comorbidities: Bernoulli(0.3)
-        - Lab values: Normal distributions with realistic ranges
-        - Medications: Bernoulli(0.2)
-
-        Args:
-            n_patients: Number of synthetic patients
-            n_genetic_markers: Dimension of genetic marker vector
-            n_comorbidities: Number of comorbidity flags
-            n_lab_values: Number of lab test values
-            n_medications: Number of medication history flags
-        """
-        print(f"Generating {n_patients} synthetic patients...")
-
-        for i in range(n_patients):
-            patient_id = f"P{i:05d}"
-
-            # Demographics
-            age = np.clip(self._rng.normal(55, 15), 18, 100)
-            sex = self._rng.binomial(1, 0.5)
-            weight = np.clip(self._rng.normal(75, 15), 40, 150)
-
-            # Genetic markers (normalized to [0, 1])
-            genetic_markers = self._rng.uniform(0, 1, n_genetic_markers)
-
-            # Comorbidities (binary indicators)
-            comorbidities = self._rng.binomial(1, 0.3, n_comorbidities)
-
-            # Lab values (realistic ranges)
-            lab_values = np.array([
-                self._rng.normal(100, 20),    # Glucose (mg/dL)
-                self._rng.normal(1.0, 0.3),   # Creatinine (mg/dL)
-                self._rng.normal(30, 10),     # AST (U/L)
-                self._rng.normal(30, 10),     # ALT (U/L)
-                self._rng.normal(120, 30),    # LDL (mg/dL)
-                self._rng.normal(50, 15),     # HDL (mg/dL)
-                self._rng.normal(150, 50),    # Triglycerides (mg/dL)
-                self._rng.normal(14, 2),      # Hemoglobin (g/dL)
-            ])[:n_lab_values]
-
-            # Prior medications (binary indicators)
-            prior_medications = self._rng.binomial(1, 0.2, n_medications)
-
-            patient = PatientFeatures(
-                patient_id=patient_id,
-                age=age,
-                sex=sex,
-                weight=weight,
-                genetic_markers=genetic_markers,
-                comorbidities=comorbidities,
-                lab_values=lab_values,
-                prior_medications=prior_medications
-            )
-
-            self.graph.add_patient(patient)
-
-        self._patients_loaded = True
-        print(f"Generated {n_patients} patient nodes")
-
-    def create_synthetic_interactions(
-        self,
-        interaction_rate: float = 0.05,
-        success_rate: float = 0.6
-    ):
-        """Generate synthetic drug-patient interactions.
-
-        Creates random interactions between existing drugs and patients with
-        synthetic efficacy, dose, duration, and outcome values.
-
-        Args:
-            interaction_rate: Fraction of possible drug-patient pairs to create
-            success_rate: Base probability of successful outcome
-        """
-        if self.graph.num_drugs() == 0:
-            raise ValueError("No drugs loaded. Call load_protein_ligand_data() first.")
-        if self.graph.num_patients() == 0:
-            raise ValueError("No patients loaded. Call create_synthetic_patient_data() first.")
-
-        drug_ids = list(self.graph.drug_nodes.keys())
-        patient_ids = list(self.graph.patient_nodes.keys())
-
-        n_possible = len(drug_ids) * len(patient_ids)
-        n_interactions = int(n_possible * interaction_rate)
-
-        print(f"Generating {n_interactions} synthetic interactions...")
-
-        # Sample random drug-patient pairs
-        for _ in range(n_interactions):
-            drug_id = self._rng.choice(drug_ids)
-            patient_id = self._rng.choice(patient_ids)
-
-            # Generate interaction features
-            efficacy = self._rng.beta(2, 2)  # Beta distribution in [0, 1]
-            dose = self._rng.lognormal(4, 0.5)  # Log-normal dose distribution
-            duration = self._rng.gamma(5, 3)  # Gamma distribution for duration
-
-            # Outcome depends on efficacy (with noise)
-            outcome_prob = success_rate * efficacy + self._rng.normal(0, 0.1)
-            outcome_prob = np.clip(outcome_prob, 0, 1)
-            outcome = int(self._rng.binomial(1, outcome_prob))
-
-            # Adverse events (more likely with higher dose)
-            n_adverse = self._rng.poisson(dose / 200)
-            adverse_events = [f"adverse_event_{j}" for j in range(n_adverse)]
-
-            edge_features = np.array([
-                efficacy,
-                dose,
-                duration,
-                float(outcome),
-                float(len(adverse_events))
-            ])
-
-            self.graph.add_edge(drug_id, patient_id, edge_features)
-
-        print(f"Created {self.graph.num_edges()} interaction edges")
+    def create_synthetic_ligand_data(self, *args, **kwargs):
+        """Deprecated method."""
+        raise RuntimeError("This method is deprecated. Use load_real_data() instead.")
+        
+    def create_synthetic_patient_data(self, *args, **kwargs):
+        """Deprecated method."""
+        raise RuntimeError("This method is deprecated. Use load_real_data() instead.")
+    
+    def create_synthetic_interactions(self, *args, **kwargs):
+        """Deprecated method."""
+        raise RuntimeError("This method is deprecated. Use load_real_data() instead.")
 
     def save_graph(self, filepath: str):
         """Save the bipartite graph to file using pickle.
@@ -423,8 +528,8 @@ class DrugPatientDataProcessor:
         with open(filepath, 'rb') as f:
             self.graph = pickle.load(f)
         print(f"Graph loaded from {filepath}")
-        print(f"  Drugs: {self.graph.num_drugs()}")
-        print(f"  Patients: {self.graph.num_patients()}")
+        print(f"  Ligands: {self.graph.num_ligands()}")
+        print(f"  Pockets: {self.graph.num_pockets()}")
         print(f"  Interactions: {self.graph.num_edges()}")
 
     def get_statistics(self) -> Dict:
@@ -434,9 +539,12 @@ class DrugPatientDataProcessor:
             Dictionary with dataset statistics
         """
         stats = {
-            'num_drugs': self.graph.num_drugs(),
-            'num_patients': self.graph.num_patients(),
+            'num_ligands': self.graph.num_ligands(),
+            'num_pockets': self.graph.num_pockets(),
             'num_interactions': self.graph.num_edges(),
+            # Backward compatibility
+            'num_drugs': self.graph.num_ligands(),
+            'num_patients': self.graph.num_pockets(),
         }
 
         if self.graph.num_edges() > 0:
@@ -444,12 +552,20 @@ class DrugPatientDataProcessor:
             stats['positive_rate'] = labels.mean()
             stats['negative_rate'] = 1 - labels.mean()
 
-        if self.graph.num_drugs() > 0:
-            drug_features = self.graph.get_drug_features_matrix()
-            stats['drug_feature_dim'] = drug_features.shape[1]
+        if self.graph.num_ligands() > 0:
+            ligand_features = self.graph.get_ligand_features_matrix()
+            stats['ligand_feature_dim'] = ligand_features.shape[1]
+            stats['drug_feature_dim'] = ligand_features.shape[1]  # Backward compatibility
 
-        if self.graph.num_patients() > 0:
-            patient_features = self.graph.get_patient_features_matrix()
-            stats['patient_feature_dim'] = patient_features.shape[1]
+        if self.graph.num_pockets() > 0:
+            pocket_features = self.graph.get_pocket_features_matrix()
+            stats['pocket_feature_dim'] = pocket_features.shape[1]
+            stats['patient_feature_dim'] = pocket_features.shape[1]  # Backward compatibility
 
         return stats
+
+
+# Backward compatibility aliases
+PatientFeatures = ProteinPocketFeatures
+DrugPatientInteraction = DrugProteinInteraction
+DrugPatientDataProcessor = DrugProteinDataProcessor

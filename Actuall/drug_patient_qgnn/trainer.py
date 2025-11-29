@@ -1,11 +1,14 @@
 """
-Training module for Quantum Drug-Patient GNN.
+Training module for Quantum Drug-Protein GNN.
 
 This module provides:
-- DrugPatientTrainer: Main training class with fit/evaluate methods
+- DrugProteinTrainer: Main training class with fit/evaluate methods
 - Training loop with batching
 - Metrics: loss, accuracy, AUC-ROC
 - Train/validation split
+
+Backward compatibility:
+- DrugPatientTrainer is aliased to DrugProteinTrainer
 """
 
 import torch
@@ -16,8 +19,8 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 import time
 
 
-class DrugPatientTrainer:
-    """Trainer for drug-patient interaction prediction model.
+class DrugProteinTrainer:
+    """Trainer for drug-protein interaction prediction model.
 
     Handles:
     - Training loop with mini-batches
@@ -26,7 +29,7 @@ class DrugPatientTrainer:
     - Model checkpointing
 
     Args:
-        model: QuantumDrugPatientGNN model instance
+        model: QuantumDrugProteinGNN model instance
         learning_rate: Learning rate for optimizer (default: 0.001)
         device: Device to train on ('cpu', 'cuda', or 'mps')
         optimizer: Optional custom optimizer (default: Adam)
@@ -84,30 +87,30 @@ class DrugPatientTrainer:
             indices: Indices of edges to include in batch
 
         Returns:
-            Tuple of (drug_features, patient_features, labels)
+            Tuple of (ligand_features, pocket_features, labels)
         """
-        # Get full feature matrices
-        drug_feature_matrix = graph.get_drug_features_matrix()
-        patient_feature_matrix = graph.get_patient_features_matrix()
+        # Get full feature matrices (use backward-compatible methods)
+        ligand_feature_matrix = graph.get_drug_features_matrix()  # Uses backward-compatible method
+        pocket_feature_matrix = graph.get_patient_features_matrix()  # Uses backward-compatible method
         edge_index, edge_features = graph.get_edge_index()
 
         # Extract batch edges
-        batch_drug_indices = edge_index[0, indices]
-        batch_patient_indices = edge_index[1, indices]
+        batch_ligand_indices = edge_index[0, indices]
+        batch_pocket_indices = edge_index[1, indices]
 
         # Get features for this batch
-        batch_drug_features = drug_feature_matrix[batch_drug_indices]
-        batch_patient_features = patient_feature_matrix[batch_patient_indices]
+        batch_ligand_features = ligand_feature_matrix[batch_ligand_indices]
+        batch_pocket_features = pocket_feature_matrix[batch_pocket_indices]
 
-        # Get labels (outcome column from edge features)
-        batch_labels = edge_features[indices, 3]  # outcome is index 3
+        # Get labels (outcome column from edge features - now index 0 instead of 3)
+        batch_labels = edge_features[indices, 0]  # outcome is index 0 in new format
 
         # Convert to tensors
-        drug_features = torch.tensor(batch_drug_features, dtype=torch.float32)
-        patient_features = torch.tensor(batch_patient_features, dtype=torch.float32)
+        ligand_features = torch.tensor(batch_ligand_features, dtype=torch.float32)
+        pocket_features = torch.tensor(batch_pocket_features, dtype=torch.float32)
         labels = torch.tensor(batch_labels, dtype=torch.float32)
 
-        return drug_features, patient_features, labels
+        return ligand_features, pocket_features, labels
 
     def train_epoch(
         self,
@@ -146,18 +149,18 @@ class DrugPatientTrainer:
             batch_indices = indices[start_idx:end_idx]
 
             # Prepare batch
-            drug_features, patient_features, labels = self._prepare_batch_data(
+            ligand_features, pocket_features, labels = self._prepare_batch_data(
                 graph, batch_indices
             )
 
             # Move to device
-            drug_features = drug_features.to(self.device)
-            patient_features = patient_features.to(self.device)
+            ligand_features = ligand_features.to(self.device)
+            pocket_features = pocket_features.to(self.device)
             labels = labels.to(self.device)
 
             # Forward pass
             self.optimizer.zero_grad()
-            outputs = self.model(drug_features, patient_features).squeeze(-1)
+            outputs = self.model(ligand_features, pocket_features).squeeze(-1)
             loss = self.criterion(outputs, labels)
 
             # Backward pass
@@ -212,17 +215,17 @@ class DrugPatientTrainer:
                 batch_indices = indices[start_idx:end_idx]
 
                 # Prepare batch
-                drug_features, patient_features, labels = self._prepare_batch_data(
+                ligand_features, pocket_features, labels = self._prepare_batch_data(
                     graph, batch_indices
                 )
 
                 # Move to device
-                drug_features = drug_features.to(self.device)
-                patient_features = patient_features.to(self.device)
+                ligand_features = ligand_features.to(self.device)
+                pocket_features = pocket_features.to(self.device)
                 labels = labels.to(self.device)
 
                 # Forward pass
-                outputs = self.model(drug_features, patient_features).squeeze(-1)
+                outputs = self.model(ligand_features, pocket_features).squeeze(-1)
                 loss = self.criterion(outputs, labels)
 
                 # Track metrics
@@ -379,3 +382,7 @@ class DrugPatientTrainer:
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.history = checkpoint['history']
         print(f"Checkpoint loaded from {filepath}")
+
+
+# Backward compatibility alias
+DrugPatientTrainer = DrugProteinTrainer

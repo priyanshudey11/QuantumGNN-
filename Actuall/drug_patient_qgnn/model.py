@@ -1,26 +1,26 @@
 """
-Quantum Graph Neural Network model for drug-patient interaction prediction.
+Quantum Graph Neural Network model for drug-protein interaction prediction.
 
 This module implements:
-- QuantumDrugPatientGNN: Main model class
+- QuantumDrugProteinGNN: Main model class
 - Quantum interaction layer using PennyLane
 - Classical fallback mode for comparison
 
 Mathematical formulation:
 
 1. Classical pre-embedding:
-   h_D = σ(W_D * x_D + b_D)
-   h_P = σ(W_P * x_P + b_P)
+   h_L = σ(W_L * x_L + b_L)  # Ligand (drug) features
+   h_P = σ(W_P * x_P + b_P)  # Protein pocket features
 
 2. Quantum encoding (angle encoding):
-   |ψ_D(0)⟩ = ⊗_k R_y(h_D[k])|0⟩
-   |ψ_P(0)⟩ = ⊗_k R_y(h_P[k])|0⟩
+   |ψ_L(0)⟩ = ⊗_k R_y(h_L[k])|0⟩  # Ligand qubits
+   |ψ_P(0)⟩ = ⊗_k R_y(h_P[k])|0⟩  # Pocket qubits
 
 3. Entangling ansatz:
-   U_DP(Θ) = ∏_wires (R_z(φ) R_x(λ)) · ∏_pairs CNOT
+   U_LP(Θ) = ∏_wires (R_z(φ) R_x(λ)) · ∏_pairs CNOT
 
 4. Readout:
-   z = ⟨ψ_DP_final | Z | ψ_DP_final⟩
+   z = ⟨ψ_LP_final | Z | ψ_LP_final⟩
 
 5. Classical output head:
    prob = σ(W_out * ReLU(W_1 * z + b_1) + b_out)
@@ -40,12 +40,12 @@ except ImportError:
 
 
 class QuantumInteractionLayer(nn.Module):
-    """Quantum circuit layer for encoding drug-patient interactions.
+    """Quantum circuit layer for encoding ligand-protein interactions.
 
     Uses PennyLane to create a variational quantum circuit that:
-    1. Encodes drug features on first half of qubits
-    2. Encodes patient features on second half of qubits
-    3. Applies entangling gates between drug and patient qubits
+    1. Encodes ligand (drug) features on first half of qubits
+    2. Encodes protein pocket features on second half of qubits
+    3. Applies entangling gates between ligand and pocket qubits
     4. Applies variational layers
     5. Measures PauliZ expectations
 
@@ -81,49 +81,49 @@ class QuantumInteractionLayer(nn.Module):
         # Create the quantum circuit
         self.qnode = qml.QNode(self._quantum_circuit, self.dev, interface='torch')
 
-    def _quantum_circuit(self, drug_features, patient_features, q_params):
+    def _quantum_circuit(self, ligand_features, pocket_features, q_params):
         """Quantum circuit implementation.
 
         Circuit structure:
         1. Angle encoding: R_y rotations for features
-        2. Entangling layer: CNOTs between drug and patient qubits
+        2. Entangling layer: CNOTs between ligand and pocket qubits
         3. Variational layers: R_z, R_x rotations with learned parameters
         4. Measurement: PauliZ expectations
 
         # ═══════════════════════════════════════════════════════════════════
-        # QUBIT MAPPING (for a single drug-patient interaction edge):
+        # QUBIT MAPPING (for a single ligand-pocket interaction edge):
         # ═══════════════════════════════════════════════════════════════════
         #
         # Graph features → Classical encoders → Latent vectors → Quantum wires
         #
-        # Drug node features (drug_dim=19):
-        #   → MLP encoder → h_drug[0..num_qubits-1] (latent vector)
-        #   → Angle encoding: RY(h_drug[i]) on wire i
+        # Ligand node features (ligand_dim):
+        #   → MLP encoder → h_ligand[0..num_qubits-1] (latent vector)
+        #   → Angle encoding: RY(h_ligand[i]) on wire i
         #   → Mapped to wires [0, 1, ..., num_qubits-1]
         #
-        # Patient node features (patient_dim=41):
-        #   → MLP encoder → h_patient[0..num_qubits-1] (latent vector)
-        #   → Angle encoding: RY(h_patient[i]) on wire (num_qubits + i)
+        # Protein pocket node features (pocket_dim):
+        #   → MLP encoder → h_pocket[0..num_qubits-1] (latent vector)
+        #   → Angle encoding: RY(h_pocket[i]) on wire (num_qubits + i)
         #   → Mapped to wires [num_qubits, num_qubits+1, ..., 2*num_qubits-1]
         #
         # Example with num_qubits=4 (total 8 wires):
-        #   wires[0..3]  = drug latent features h_drug[0], h_drug[1], h_drug[2], h_drug[3]
-        #   wires[4..7]  = patient latent features h_patient[0], h_patient[1], h_patient[2], h_patient[3]
+        #   wires[0..3]  = ligand latent features h_ligand[0], h_ligand[1], h_ligand[2], h_ligand[3]
+        #   wires[4..7]  = pocket latent features h_pocket[0], h_pocket[1], h_pocket[2], h_pocket[3]
         #
         # Entanglement:
         #   - Initial: CNOT(0→4), CNOT(1→5), CNOT(2→6), CNOT(3→7)
-        #              (pairs each drug wire with its corresponding patient wire)
+        #              (pairs each ligand wire with its corresponding pocket wire)
         #   - Variational: Ring topology CNOT(i→i+1) for all wires
         #
         # ⚠️ Important: This is NOT a 1-to-1 vertex-to-qubit mapping!
-        #    - Each drug-patient PAIR occupies 2*num_qubits wires
+        #    - Each ligand-pocket PAIR occupies 2*num_qubits wires
         #    - High-dimensional node features are compressed to num_qubits latent dims
         #    - Each latent dimension is encoded on ONE wire via angle encoding
         # ═══════════════════════════════════════════════════════════════════
 
         Args:
-            drug_features: Tensor of shape (num_qubits,) - drug latent vector
-            patient_features: Tensor of shape (num_qubits,) - patient latent vector
+            ligand_features: Tensor of shape (num_qubits,) - ligand latent vector
+            pocket_features: Tensor of shape (num_qubits,) - pocket latent vector
             q_params: Variational parameters
 
         Returns:
@@ -132,15 +132,15 @@ class QuantumInteractionLayer(nn.Module):
         # Reshape parameters
         params = q_params.reshape(self.num_qlayers, self.total_wires, 2)
 
-        # 1. Angle encoding for drug features (first half of qubits)
+        # 1. Angle encoding for ligand features (first half of qubits)
         for i in range(self.num_qubits):
-            qml.RY(drug_features[i], wires=i)
+            qml.RY(ligand_features[i], wires=i)
 
-        # 2. Angle encoding for patient features (second half of qubits)
+        # 2. Angle encoding for pocket features (second half of qubits)
         for i in range(self.num_qubits):
-            qml.RY(patient_features[i], wires=self.num_qubits + i)
+            qml.RY(pocket_features[i], wires=self.num_qubits + i)
 
-        # 3. Initial entangling layer (connect drug and patient qubits)
+        # 3. Initial entangling layer (connect ligand and pocket qubits)
         for i in range(self.num_qubits):
             qml.CNOT(wires=[i, self.num_qubits + i])
 
@@ -159,31 +159,31 @@ class QuantumInteractionLayer(nn.Module):
         # 5. Measurements: measure PauliZ on all qubits
         return [qml.expval(qml.PauliZ(i)) for i in range(self.total_wires)]
 
-    def forward(self, drug_features, patient_features):
+    def forward(self, ligand_features, pocket_features):
         """Forward pass through quantum circuit.
 
         Args:
-            drug_features: Tensor of shape (batch_size, num_qubits)
-            patient_features: Tensor of shape (batch_size, num_qubits)
+            ligand_features: Tensor of shape (batch_size, num_qubits)
+            pocket_features: Tensor of shape (batch_size, num_qubits)
 
         Returns:
             Tensor of shape (batch_size, total_wires) with quantum measurements
         """
-        batch_size = drug_features.shape[0]
+        batch_size = ligand_features.shape[0]
         outputs = []
 
         # Process each sample in the batch
         for i in range(batch_size):
             measurements = self.qnode(
-                drug_features[i],
-                patient_features[i],
+                ligand_features[i],
+                pocket_features[i],
                 self.q_params
             )
             outputs.append(torch.stack(measurements))
         stacked = torch.stack(outputs)
 
         # Match the dtype/device of upstream tensors to avoid precision mismatches downstream.
-        return stacked.to(dtype=drug_features.dtype, device=drug_features.device)
+        return stacked.to(dtype=ligand_features.dtype, device=ligand_features.device)
 
 
 class ClassicalInteractionLayer(nn.Module):
@@ -214,71 +214,95 @@ class ClassicalInteractionLayer(nn.Module):
 
         self.network = nn.Sequential(*layers)
 
-    def forward(self, drug_features, patient_features):
+    def forward(self, ligand_features, pocket_features):
         """Forward pass through classical network.
 
         Args:
-            drug_features: Tensor of shape (batch_size, num_qubits)
-            patient_features: Tensor of shape (batch_size, num_qubits)
+            ligand_features: Tensor of shape (batch_size, num_qubits)
+            pocket_features: Tensor of shape (batch_size, num_qubits)
 
         Returns:
             Tensor of shape (batch_size, 2 * num_qubits)
         """
-        # Concatenate drug and patient features
-        combined = torch.cat([drug_features, patient_features], dim=1)
+        # Concatenate ligand and pocket features
+        combined = torch.cat([ligand_features, pocket_features], dim=1)
         return self.network(combined)
 
 
-class QuantumDrugPatientGNN(nn.Module):
-    """Quantum Graph Neural Network for drug-patient interaction prediction.
+class QuantumDrugProteinGNN(nn.Module):
+    """Quantum Graph Neural Network for drug-protein interaction prediction.
 
     Architecture:
-    1. Drug encoder: projects drug features to latent space
-    2. Patient encoder: projects patient features to latent space
-    3. Quantum/Classical interaction layer: models drug-patient interactions
-    4. Output head: predicts outcome probability
+    1. Ligand encoder: projects ligand (drug) features to latent space
+    2. Pocket encoder: projects protein pocket features to latent space
+    3. Quantum/Classical interaction layer: models ligand-pocket interactions
+    4. Output head: predicts binding probability
 
     Args:
-        drug_dim: Dimension of drug input features
-        patient_dim: Dimension of patient input features
-        num_qubits: Number of qubits per side (drug + patient)
+        ligand_dim: Dimension of ligand input features
+        pocket_dim: Dimension of protein pocket input features
+        num_qubits: Number of qubits per side (ligand + pocket)
         num_qlayers: Number of variational quantum layers
         hidden_dim: Hidden dimension for encoders (default: 64)
         use_quantum: Whether to use quantum circuit (True) or classical fallback (False)
         device_name: PennyLane device name for quantum mode
+
+        # Backward compatibility aliases
+        drug_dim: Alias for ligand_dim
+        patient_dim: Alias for pocket_dim
     """
 
     def __init__(
         self,
-        drug_dim: int,
-        patient_dim: int,
+        ligand_dim: Optional[int] = None,
+        pocket_dim: Optional[int] = None,
         num_qubits: int = 4,
         num_qlayers: int = 2,
         hidden_dim: int = 64,
         use_quantum: bool = True,
-        device_name: str = 'default.qubit'
+        device_name: str = 'default.qubit',
+        # Backward compatibility
+        drug_dim: Optional[int] = None,
+        patient_dim: Optional[int] = None
     ):
         super().__init__()
 
-        self.drug_dim = drug_dim
-        self.patient_dim = patient_dim
+        # Handle backward compatibility
+        if drug_dim is not None and ligand_dim is None:
+            ligand_dim = drug_dim
+        if patient_dim is not None and pocket_dim is None:
+            pocket_dim = patient_dim
+
+        if ligand_dim is None or pocket_dim is None:
+            raise ValueError("Must provide either (ligand_dim, pocket_dim) or (drug_dim, patient_dim)")
+
+        self.ligand_dim = ligand_dim
+        self.pocket_dim = pocket_dim
+        # Backward compatibility
+        self.drug_dim = ligand_dim
+        self.patient_dim = pocket_dim
+
         self.num_qubits = num_qubits
         self.num_qlayers = num_qlayers
         self.use_quantum = use_quantum
 
-        # Drug encoder: drug_dim → hidden_dim → num_qubits
-        self.drug_encoder = nn.Sequential(
-            nn.Linear(drug_dim, hidden_dim),
+        # Ligand encoder: ligand_dim → hidden_dim → num_qubits
+        self.ligand_encoder = nn.Sequential(
+            nn.Linear(ligand_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, num_qubits)
         )
 
-        # Patient encoder: patient_dim → hidden_dim → num_qubits
-        self.patient_encoder = nn.Sequential(
-            nn.Linear(patient_dim, hidden_dim),
+        # Pocket encoder: pocket_dim → hidden_dim → num_qubits
+        self.pocket_encoder = nn.Sequential(
+            nn.Linear(pocket_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, num_qubits)
         )
+
+        # Backward compatibility aliases
+        self.drug_encoder = self.ligand_encoder
+        self.patient_encoder = self.pocket_encoder
 
         # Quantum or classical interaction layer
         if use_quantum:
@@ -303,39 +327,39 @@ class QuantumDrugPatientGNN(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, drug_features, patient_features):
+    def forward(self, ligand_features, pocket_features):
         """Forward pass through the QGNN.
 
         Args:
-            drug_features: Tensor of shape (batch_size, drug_dim)
-            patient_features: Tensor of shape (batch_size, patient_dim)
+            ligand_features: Tensor of shape (batch_size, ligand_dim)
+            pocket_features: Tensor of shape (batch_size, pocket_dim)
 
         Returns:
-            Tensor of shape (batch_size, 1) with outcome probabilities
+            Tensor of shape (batch_size, 1) with binding probabilities
         """
         # Encode features to latent space
-        h_drug = self.drug_encoder(drug_features)  # (batch_size, num_qubits)
-        h_patient = self.patient_encoder(patient_features)  # (batch_size, num_qubits)
+        h_ligand = self.ligand_encoder(ligand_features)  # (batch_size, num_qubits)
+        h_pocket = self.pocket_encoder(pocket_features)  # (batch_size, num_qubits)
 
         # Apply tanh to map to [-π, π] for quantum encoding
         if self.use_quantum:
-            h_drug = torch.tanh(h_drug) * np.pi
-            h_patient = torch.tanh(h_patient) * np.pi
+            h_ligand = torch.tanh(h_ligand) * np.pi
+            h_pocket = torch.tanh(h_pocket) * np.pi
 
         # Quantum/classical interaction layer
-        interaction_output = self.interaction_layer(h_drug, h_patient)
+        interaction_output = self.interaction_layer(h_ligand, h_pocket)
 
         # Output prediction
         output = self.output_head(interaction_output)
 
         return output
 
-    def predict_batch(self, drug_features, patient_features, threshold: float = 0.5):
-        """Predict outcomes for a batch of drug-patient pairs.
+    def predict_batch(self, ligand_features, pocket_features, threshold: float = 0.5):
+        """Predict binding for a batch of ligand-pocket pairs.
 
         Args:
-            drug_features: Tensor of shape (batch_size, drug_dim)
-            patient_features: Tensor of shape (batch_size, patient_dim)
+            ligand_features: Tensor of shape (batch_size, ligand_dim)
+            pocket_features: Tensor of shape (batch_size, pocket_dim)
             threshold: Classification threshold (default: 0.5)
 
         Returns:
@@ -345,7 +369,7 @@ class QuantumDrugPatientGNN(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            probs = self(drug_features, patient_features).squeeze(-1)
+            probs = self(ligand_features, pocket_features).squeeze(-1)
             preds = (probs >= threshold).long()
         return probs, preds
 
@@ -356,10 +380,17 @@ class QuantumDrugPatientGNN(nn.Module):
     def get_model_info(self) -> dict:
         """Get model configuration information."""
         return {
-            'drug_dim': self.drug_dim,
-            'patient_dim': self.patient_dim,
+            'ligand_dim': self.ligand_dim,
+            'pocket_dim': self.pocket_dim,
             'num_qubits': self.num_qubits,
             'num_qlayers': self.num_qlayers,
             'use_quantum': self.use_quantum,
-            'num_parameters': self.get_num_parameters()
+            'num_parameters': self.get_num_parameters(),
+            # Backward compatibility
+            'drug_dim': self.drug_dim,
+            'patient_dim': self.patient_dim
         }
+
+
+# Backward compatibility alias
+QuantumDrugPatientGNN = QuantumDrugProteinGNN

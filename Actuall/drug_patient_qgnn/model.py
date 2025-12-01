@@ -134,11 +134,11 @@ class QuantumInteractionLayer(nn.Module):
 
         # 1. Angle encoding for ligand features (first half of qubits)
         for i in range(self.num_qubits):
-            qml.RY(ligand_features[i], wires=i)
+            qml.RY(ligand_features[:, i], wires=i)
 
         # 2. Angle encoding for pocket features (second half of qubits)
         for i in range(self.num_qubits):
-            qml.RY(pocket_features[i], wires=self.num_qubits + i)
+            qml.RY(pocket_features[:, i], wires=self.num_qubits + i)
 
         # 3. Initial entangling layer (connect ligand and pocket qubits)
         for i in range(self.num_qubits):
@@ -169,18 +169,21 @@ class QuantumInteractionLayer(nn.Module):
         Returns:
             Tensor of shape (batch_size, total_wires) with quantum measurements
         """
-        batch_size = ligand_features.shape[0]
-        outputs = []
-
-        # Process each sample in the batch
-        for i in range(batch_size):
-            measurements = self.qnode(
-                ligand_features[i],
-                pocket_features[i],
-                self.q_params
-            )
-            outputs.append(torch.stack(measurements))
-        stacked = torch.stack(outputs)
+        # Pass the entire batch to the QNode
+        # PennyLane handles batching automatically when using torch interface
+        measurements = self.qnode(
+            ligand_features,
+            pocket_features,
+            self.q_params
+        )
+        
+        # Stack measurements if returned as a list of tensors (one per wire)
+        if isinstance(measurements, (list, tuple)):
+            # measurements is [Tensor(batch_size), Tensor(batch_size), ...]
+            # Stack to get (batch_size, total_wires)
+            stacked = torch.stack(measurements, dim=1)
+        else:
+            stacked = measurements
 
         # Match the dtype/device of upstream tensors to avoid precision mismatches downstream.
         return stacked.to(dtype=ligand_features.dtype, device=ligand_features.device)
@@ -287,6 +290,7 @@ class QuantumDrugProteinGNN(nn.Module):
         self.use_quantum = use_quantum
 
         # Ligand encoder: ligand_dim → hidden_dim → num_qubits
+        self.ligand_norm = nn.BatchNorm1d(ligand_dim)
         self.ligand_encoder = nn.Sequential(
             nn.Linear(ligand_dim, hidden_dim),
             nn.ReLU(),
@@ -294,6 +298,7 @@ class QuantumDrugProteinGNN(nn.Module):
         )
 
         # Pocket encoder: pocket_dim → hidden_dim → num_qubits
+        self.pocket_norm = nn.BatchNorm1d(pocket_dim)
         self.pocket_encoder = nn.Sequential(
             nn.Linear(pocket_dim, hidden_dim),
             nn.ReLU(),
@@ -319,12 +324,11 @@ class QuantumDrugProteinGNN(nn.Module):
             )
             interaction_output_dim = 2 * num_qubits
 
-        # Output head: interaction_output → 32 → 1 (probability)
+        # Output head: interaction_output → 32 → 1 (logits)
         self.output_head = nn.Sequential(
             nn.Linear(interaction_output_dim, 32),
             nn.ReLU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()
+            nn.Linear(32, 1)
         )
 
     def forward(self, ligand_features, pocket_features):
@@ -338,6 +342,10 @@ class QuantumDrugProteinGNN(nn.Module):
             Tensor of shape (batch_size, 1) with binding probabilities
         """
         # Encode features to latent space
+        # Apply normalization first
+        ligand_features = self.ligand_norm(ligand_features)
+        pocket_features = self.pocket_norm(pocket_features)
+        
         h_ligand = self.ligand_encoder(ligand_features)  # (batch_size, num_qubits)
         h_pocket = self.pocket_encoder(pocket_features)  # (batch_size, num_qubits)
 
@@ -369,7 +377,8 @@ class QuantumDrugProteinGNN(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            probs = self(ligand_features, pocket_features).squeeze(-1)
+            logits = self(ligand_features, pocket_features).squeeze(-1)
+            probs = torch.sigmoid(logits)
             preds = (probs >= threshold).long()
         return probs, preds
 

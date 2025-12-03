@@ -1,0 +1,433 @@
+{
+  "comparison_metadata": {
+    "version_1": {
+      "file": "compare_quantum_vs_classical_OPTIMIZED.ipynb",
+      "nickname": "Drug-Patient QGNN (Optimized)",
+      "last_run": "2025-12-01 09:21:26"
+    },
+    "version_2": {
+      "file": "compare_ligand_pocket_quantum_vs_classical.ipynb",
+      "nickname": "Ligand-Pocket QGNN",
+      "last_run": "Not fully executed"
+    },
+    "comparison_date": "2025-12-02"
+  },
+
+  "high_level_differences": {
+    "primary_task": {
+      "version_1": "Drug-Patient interaction prediction",
+      "version_2": "Ligand-Pocket binding classification"
+    },
+    "data_representation": {
+      "version_1": "Feature vectors for both drugs and patients (no graph structure for drugs)",
+      "version_2": "Graph neural network for ligands (atoms + bonds) + MLP for pockets"
+    },
+    "architecture_paradigm": {
+      "version_1": "Vector-to-vector processing with quantum/classical mixing layer",
+      "version_2": "Graph-to-vector + Vector-to-vector with quantum/classical interaction layer"
+    },
+    "optimization_focus": {
+      "version_1": "Speed-optimized for overnight runs (reduced data, fewer layers)",
+      "version_2": "Full-scale comparison with standard hyperparameters"
+    }
+  },
+
+  "data_processing": {
+    "version_1_drug_patient": {
+      "data_source": "PDB protein descriptor files",
+      "max_samples": 1000,
+      "actual_loaded": {
+        "drugs": 3662,
+        "patients": 822,
+        "interactions": 14528
+      },
+      "feature_extraction": {
+        "drug_features": "11-dimensional feature vectors from ligand descriptors",
+        "patient_features": "19-dimensional feature vectors from pocket descriptors",
+        "edge_features": "Not used in training",
+        "graph_structure": "Bipartite graph (drug-patient edges) but only features are used"
+      },
+      "data_format": "Flattened feature vectors stored in pandas DataFrame",
+      "negative_sampling": "Automatic generation to balance dataset (50% positive, 50% negative)",
+      "train_val_split": "Stratified 80-20 split",
+      "loading_time": "102 seconds"
+    },
+    "version_2_ligand_pocket": {
+      "data_source": "PDB protein descriptor files (same source, different processing)",
+      "max_samples": 3000,
+      "actual_loaded": {
+        "ligands": 22480,
+        "pockets": 2574,
+        "interactions": 44960
+      },
+      "feature_extraction": {
+        "ligand_features": "10-dimensional atom features + graph structure (bonds as edges)",
+        "pocket_features": "19-dimensional feature vectors",
+        "graph_structure": "True graph representation for ligands with nodes (atoms) and edges (bonds)",
+        "batching": "Custom collate function for graph batching"
+      },
+      "data_format": "Graph objects with node features and edge indices",
+      "negative_sampling": "Automatic generation to balance dataset (50% positive, 50% negative)",
+      "train_val_split": "80-20 split (35,968 train, 8,992 val)",
+      "loading_time": "~67 seconds"
+    },
+    "key_difference": "Version 1 treats drugs as feature vectors; Version 2 treats ligands as molecular graphs with explicit atom-bond structure"
+  },
+
+  "model_architecture": {
+    "version_1_drug_patient": {
+      "module_name": "drug_patient_qgnn",
+      "class": "QuantumDrugPatientGNN",
+      "components": [
+        {
+          "name": "drug_encoder",
+          "type": "MLP",
+          "input_dim": 11,
+          "hidden_dim": 128,
+          "output_dim": 128,
+          "layers": "Linear(11→128) → ReLU → Dropout(0.3) → Linear(128→128)"
+        },
+        {
+          "name": "patient_encoder",
+          "type": "MLP",
+          "input_dim": 19,
+          "hidden_dim": 128,
+          "output_dim": 128,
+          "layers": "Linear(19→128) → ReLU → Dropout(0.3) → Linear(128→128)"
+        },
+        {
+          "name": "interaction_layer",
+          "type": "Quantum (VQC) or Classical (MLP)",
+          "quantum_version": {
+            "num_qubits": 6,
+            "num_qlayers": 2,
+            "input_features": 12,
+            "device": "lightning.gpu",
+            "circuit_structure": "Amplitude encoding + Strongly Entangling Layers",
+            "measurement": "Pauli-Z on first qubit"
+          },
+          "classical_version": {
+            "layers": "Linear(256→128) → ReLU → Dropout(0.3) → Linear(128→64) → ReLU → Linear(64→1)"
+          }
+        }
+      ],
+      "forward_pass": "drug_features → drug_encoder → latent_drug [128] | patient_features → patient_encoder → latent_patient [128] | concat → [256] → quantum/classical layer → output [1]",
+      "total_parameters_quantum": "~52K parameters",
+      "total_parameters_classical": "~88K parameters"
+    },
+    "version_2_ligand_pocket": {
+      "module_name": "ligand_pocket_qgnn",
+      "class": "LigandPocketQGNN",
+      "components": [
+        {
+          "name": "ligand_encoder",
+          "type": "Graph Neural Network (GCN)",
+          "input_dim": 10,
+          "hidden_dim": 64,
+          "output_dim": 64,
+          "layers": "GCNConv(10→64) → ReLU → GCNConv(64→64) → GlobalMeanPool",
+          "description": "Processes molecular graph structure (atoms as nodes, bonds as edges)"
+        },
+        {
+          "name": "pocket_encoder",
+          "type": "MLP",
+          "input_dim": 19,
+          "hidden_dim": 64,
+          "output_dim": 64,
+          "layers": "Linear(19→64) → ReLU → Linear(64→64)"
+        },
+        {
+          "name": "interaction_layer",
+          "type": "Quantum (VQC) or Classical (MLP)",
+          "quantum_version": {
+            "num_qubits": 6,
+            "num_qlayers": 2,
+            "input_features": 12,
+            "device": "default.qubit (CPU simulation)",
+            "circuit_structure": "Amplitude encoding + Basic Entangling Layers",
+            "measurement": "Expectation value on all qubits"
+          },
+          "classical_version": {
+            "layers": "Linear(128→64) → ReLU → Linear(64→1) → Sigmoid"
+          }
+        }
+      ],
+      "forward_pass": "ligand_graph → GCN encoder → latent_ligand [64] | pocket_features → MLP encoder → latent_pocket [64] | concat → [128] → quantum/classical layer → output [1]",
+      "total_parameters_quantum": "~28K parameters (estimated)",
+      "total_parameters_classical": "~35K parameters (estimated)"
+    },
+    "key_architectural_difference": "Version 1 uses MLPs for both inputs (vector→vector). Version 2 uses GCN for ligands (graph→vector) and MLP for pockets (vector→vector). Version 2 explicitly models molecular structure."
+  },
+
+  "training_configuration": {
+    "version_1": {
+      "epochs": 100,
+      "batch_size": 128,
+      "learning_rate_quantum": 0.005,
+      "learning_rate_classical": 0.0005,
+      "optimizer": "AdamW (weight_decay=1e-5)",
+      "scheduler": "ReduceLROnPlateau (mode=max, factor=0.5, patience=5)",
+      "loss_function": "BCEWithLogitsLoss",
+      "early_stopping_patience": 15,
+      "gradient_clipping": "max_norm=1.0",
+      "device": "cuda (RTX 3080)",
+      "quantum_device": "lightning.gpu (GPU-accelerated)",
+      "num_workers": 0,
+      "pin_memory": true,
+      "seed": 42,
+      "val_split": 0.2,
+      "batches_per_epoch": 90,
+      "estimated_time_per_epoch": "18 minutes",
+      "actual_execution": "Partially executed, quantum model trained"
+    },
+    "version_2": {
+      "epochs": 100,
+      "batch_size": 128,
+      "learning_rate_quantum": 0.001,
+      "learning_rate_classical": 0.001,
+      "optimizer": "Adam (default weight_decay)",
+      "scheduler": "ReduceLROnPlateau (mode=max, factor=0.5, patience=5)",
+      "loss_function": "BCELoss",
+      "early_stopping_patience": 15,
+      "gradient_clipping": "max_norm=1.0",
+      "device": "cuda",
+      "quantum_device": "default.qubit (CPU simulation)",
+      "num_workers": "not specified (default)",
+      "pin_memory": "not specified",
+      "seed": 42069,
+      "simulation_seed": 42069,
+      "val_split": 0.2,
+      "batches_per_epoch": 281,
+      "estimated_time_per_epoch": "not specified",
+      "actual_execution": "Both models trained to completion"
+    },
+    "differences": {
+      "learning_rates": "v1 uses different LRs for quantum (0.005) vs classical (0.0005); v2 uses same LR (0.001) for both",
+      "optimizer": "v1 uses AdamW with weight decay; v2 uses standard Adam",
+      "loss": "v1 uses BCEWithLogitsLoss (logits input); v2 uses BCELoss (probability input)",
+      "quantum_backend": "v1 uses GPU-accelerated quantum simulation; v2 uses CPU simulation",
+      "dataset_size": "v1 has 11,622 training samples; v2 has 35,968 training samples (3x larger)"
+    }
+  },
+
+  "quantum_circuit_details": {
+    "version_1": {
+      "framework": "PennyLane",
+      "num_qubits": 6,
+      "num_layers": 2,
+      "encoding": "Amplitude encoding (AmplitudeEmbedding)",
+      "variational_layers": "StronglyEntanglingLayers",
+      "measurement": "Pauli-Z expectation on qubit 0",
+      "device": "lightning.gpu (GPU-accelerated simulator)",
+      "input_dimension": 12,
+      "input_normalization": "L2 normalization to unit vector",
+      "output": "Single scalar value",
+      "trainable_parameters": "Weight matrices in StronglyEntanglingLayers",
+      "shots": "None (expectation value, not sampling)"
+    },
+    "version_2": {
+      "framework": "PennyLane",
+      "num_qubits": 6,
+      "num_layers": 2,
+      "encoding": "Amplitude encoding (AmplitudeEmbedding)",
+      "variational_layers": "BasicEntanglerLayers",
+      "measurement": "Expectation values on all qubits",
+      "device": "default.qubit (CPU simulator)",
+      "input_dimension": 12,
+      "input_normalization": "L2 normalization to unit vector",
+      "output": "6 expectation values → Linear layer → scalar",
+      "trainable_parameters": "Rotation angles in BasicEntanglerLayers",
+      "shots": "None (expectation value, not sampling)"
+    },
+    "key_differences": {
+      "entanglement": "v1 uses StronglyEntanglingLayers (more expressive, more parameters); v2 uses BasicEntanglerLayers (simpler)",
+      "measurement": "v1 measures single qubit; v2 measures all qubits",
+      "hardware_acceleration": "v1 uses GPU quantum simulation; v2 uses CPU",
+      "expressivity": "v1 likely has higher quantum expressivity due to stronger entanglement"
+    }
+  },
+
+  "results_and_performance": {
+    "version_1_drug_patient": {
+      "quantum_model": {
+        "status": "Training completed",
+        "best_validation_auc": "Not shown in output (training ran)",
+        "final_validation_accuracy": "Not shown",
+        "training_time": "Not shown (overnight run expected)",
+        "convergence": "Unknown from provided output"
+      },
+      "classical_model": {
+        "status": "Not executed in shown output",
+        "best_validation_auc": "N/A",
+        "final_validation_accuracy": "N/A"
+      },
+      "comparison": {
+        "quantum_vs_classical": "Incomplete - only quantum model training shown",
+        "optimization_goal": "Speed (8-10 hours target)"
+      }
+    },
+    "version_2_ligand_pocket": {
+      "quantum_model": {
+        "status": "Training completed",
+        "best_validation_auc": 0.6704,
+        "best_epoch": 4,
+        "final_validation_accuracy": 0.6388,
+        "validation_loss": 0.6435,
+        "precision": 0.6590,
+        "recall": 0.5900,
+        "f1_score": 0.6226,
+        "training_time": "Not specified but completed",
+        "convergence": "Early convergence at epoch 4"
+      },
+      "classical_model": {
+        "status": "Training completed",
+        "best_validation_auc": 0.7728,
+        "best_epoch": 70,
+        "final_validation_accuracy": 0.7075,
+        "validation_loss": 0.5419,
+        "precision": 0.8280,
+        "recall": 0.5312,
+        "f1_score": 0.6472,
+        "training_time": "Not specified but completed",
+        "convergence": "Converged at epoch 70"
+      },
+      "comparison": {
+        "quantum_vs_classical_auc": "Classical wins by 10.24% (0.7728 vs 0.6704)",
+        "quantum_advantage": "-10.24% (deficit)",
+        "winner": "Classical model significantly outperforms quantum",
+        "quantum_issues": "Poor convergence (peaked early at epoch 4), lower expressivity",
+        "classical_advantages": "Better convergence, higher precision, more stable training"
+      }
+    },
+    "overall_assessment": {
+      "version_1": "Optimized for speed but incomplete comparison results",
+      "version_2": "Complete comparison showing classical superiority",
+      "quantum_performance": "Version 2 quantum model underperformed, possibly due to CPU simulation, simpler entanglement, or task mismatch"
+    }
+  },
+
+  "code_quality_and_practices": {
+    "version_1": {
+      "modularization": "Well-modularized with drug_patient_qgnn package",
+      "progress_tracking": "Detailed with tqdm progress bars for batches and epochs",
+      "logging": "Comprehensive logging with timestamps and performance metrics",
+      "reproducibility": "Good seed management (SEED=42)",
+      "optimization_indicators": "Clear indicators of speed optimization (reduced data, reduced layers)",
+      "debugging_support": "Verbose logging levels, batch time tracking",
+      "auto_reload": "Uses IPython autoreload for development"
+    },
+    "version_2": {
+      "modularization": "Well-modularized with ligand_pocket_qgnn package",
+      "progress_tracking": "Detailed with tqdm progress bars",
+      "logging": "Comprehensive logging with timestamps",
+      "reproducibility": "Excellent seed management (SEED=42069, SIMULATION_SEED=42069, cudnn.deterministic=True)",
+      "visualization": "More detailed visualization (6 subplots vs 4)",
+      "data_handling": "Custom collate function for graph batching",
+      "auto_reload": "Uses IPython autoreload for development"
+    },
+    "comparison": "Both have good practices; v2 has more rigorous reproducibility settings and better visualization"
+  },
+
+  "computational_requirements": {
+    "version_1": {
+      "gpu_usage": "CUDA + GPU-accelerated quantum simulation (lightning.gpu)",
+      "estimated_runtime": "8-10 hours",
+      "memory_requirements": "Moderate (1000 drugs, 11K training samples)",
+      "parallelization": "No multiprocessing (NUM_WORKERS=0 to avoid quantum circuit pickling)",
+      "optimization_strategy": "Reduced dataset size and model complexity for overnight completion"
+    },
+    "version_2": {
+      "gpu_usage": "CUDA for neural networks, CPU for quantum simulation",
+      "estimated_runtime": "Not specified (likely longer due to 3x dataset size)",
+      "memory_requirements": "Higher (3000 samples, 36K training samples, graph structures)",
+      "parallelization": "Default DataLoader settings",
+      "optimization_strategy": "Standard full-scale comparison"
+    },
+    "key_difference": "v1 is speed-optimized; v2 is accuracy-optimized with larger dataset"
+  },
+
+  "use_cases_and_applications": {
+    "version_1_drug_patient": {
+      "domain": "Drug repurposing and personalized medicine",
+      "prediction_task": "Will a drug work for a specific patient?",
+      "input_interpretation": "Drug properties + Patient/Disease properties",
+      "output_interpretation": "Probability of positive drug-patient interaction",
+      "real_world_application": "Predicting drug efficacy for patients, clinical trial matching"
+    },
+    "version_2_ligand_pocket": {
+      "domain": "Molecular docking and drug discovery",
+      "prediction_task": "Will a small molecule bind to a protein pocket?",
+      "input_interpretation": "Molecular structure of ligand + Protein pocket features",
+      "output_interpretation": "Probability of ligand-pocket binding",
+      "real_world_application": "Virtual screening, lead optimization, structure-based drug design"
+    },
+    "domain_difference": "v1 is higher-level (drug-patient matching); v2 is molecular-level (ligand-protein binding)"
+  },
+
+  "strengths_and_weaknesses": {
+    "version_1_strengths": [
+      "GPU-accelerated quantum simulation (faster)",
+      "Speed-optimized for practical runtime",
+      "Simpler data representation (easier to scale)",
+      "Stronger entanglement in quantum circuit (more expressive)",
+      "Different learning rates for quantum vs classical (better optimization)"
+    ],
+    "version_1_weaknesses": [
+      "Incomplete results in provided output",
+      "Loses molecular structure information (treats drugs as vectors)",
+      "Smaller dataset (may underfit)",
+      "Limited to feature-based representation"
+    ],
+    "version_2_strengths": [
+      "Complete experimental results",
+      "True graph representation preserves molecular structure",
+      "Larger dataset (better generalization)",
+      "More detailed evaluation and visualization",
+      "Measures all qubits (richer quantum information)"
+    ],
+    "version_2_weaknesses": [
+      "CPU quantum simulation (slower)",
+      "Quantum model underperformed classical significantly",
+      "Basic entanglement (less expressive quantum circuit)",
+      "Same learning rate for both models (less flexible optimization)",
+      "Higher computational requirements"
+    ]
+  },
+
+  "recommendations": {
+    "when_to_use_version_1": [
+      "Speed is critical (need results in 8-10 hours)",
+      "Working with pre-computed feature vectors",
+      "Drug-patient interaction prediction tasks",
+      "Limited computational resources",
+      "When GPU quantum simulation is available"
+    ],
+    "when_to_use_version_2": [
+      "Need to preserve molecular structure information",
+      "Ligand-protein binding prediction",
+      "Sufficient time for full-scale experiments",
+      "When molecular graphs are important for the task",
+      "Need complete baseline comparison"
+    ],
+    "improvements_for_version_1": [
+      "Complete the classical model training",
+      "Increase dataset size if possible",
+      "Add graph structure for drugs if molecular data is available"
+    ],
+    "improvements_for_version_2": [
+      "Use GPU quantum simulation (lightning.gpu)",
+      "Try StronglyEntanglingLayers for better expressivity",
+      "Optimize learning rates separately for quantum vs classical",
+      "Investigate why quantum model converged so early"
+    ]
+  },
+
+  "summary": {
+    "version_1": "Speed-optimized drug-patient QGNN using feature vectors and GPU-accelerated quantum simulation. Designed for overnight runs with reduced complexity. Incomplete results shown.",
+    "version_2": "Full-scale ligand-pocket QGNN using graph neural networks for molecular structure. Complete comparison showing classical model outperforming quantum by 10.24% AUC. CPU quantum simulation.",
+    "main_difference": "v1 treats drugs as vectors; v2 treats ligands as molecular graphs. v1 is speed-optimized; v2 is completeness-optimized.",
+    "quantum_performance": "v1: Unknown (incomplete). v2: Underperformed classical significantly (0.67 vs 0.77 AUC).",
+    "architectural_paradigm": "v1: Vector-Vector-Quantum/Classical. v2: Graph-Vector-Quantum/Classical.",
+    "which_is_better": "Depends on use case. v1 for speed and simplicity; v2 for molecular-level accuracy and complete baselines. Both show quantum GNNs need further development to match classical performance."
+  }
+}

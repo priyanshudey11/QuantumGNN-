@@ -1,0 +1,29 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║  ⚠️  IMPORTANT: RESTART YOUR JUPYTER KERNEL  ⚠️                 ║
+║                                                                ║
+║  The hardware_optimizer.py was updated to fix the error.      ║
+║  Your Jupyter kernel has the OLD version cached in memory.    ║
+║                                                                ║
+║  TO FIX:                                                       ║
+║  1. Click "Kernel" menu → "Restart Kernel"                    ║
+║  2. Re-run all cells from the beginning                       ║
+║                                                                ║
+║  OR just run this cell first:                                 ║
+║                                                                ║
+║  import importlib                                              ║
+║  import hardware_optimizer                                     ║
+║  importlib.reload(hardware_optimizer)                          ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+WHAT WAS FIXED:
+- num_workers: 10 → 0 (avoids multiprocessing pickle error)
+- pin_memory: True → False (MPS doesn't support it)
+- persistent_workers: True → False (must be False when workers=0)
+
+After restarting, you should see:
+  Workers: 0
+  Pin Memory: False
+  
+This will work correctly with Jupyter on macOS.

@@ -182,13 +182,15 @@ def detect_hardware():
         torch.backends.cudnn.benchmark = True
 
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        hw_info['device'] = 'mps'
-        hw_info['device_name'] = 'Apple Metal Performance Shaders'
-        # Inherit compute capability from CPU detection
-        if hw_info['compute_capability'].startswith('apple_'):
-            hw_info['compute_capability'] = hw_info['compute_capability'] + '_gpu'
-        else:
-            hw_info['compute_capability'] = 'apple_silicon_gpu'
+        # MPS is available but doesn't support sparse tensors yet (needed for GCN)
+        # Fall back to CPU for compatibility
+        hw_info['device'] = 'cpu'
+        hw_info['device_name'] = 'CPU (MPS unsupported sparse ops)'
+        # Keep Apple Silicon capability for optimization
+        if not hw_info['compute_capability'].startswith('apple_'):
+            hw_info['compute_capability'] = 'apple_silicon'
+
+        print("⚠️  Note: MPS detected but using CPU (GCN requires sparse tensors)")
 
     return hw_info
 
@@ -248,48 +250,27 @@ def optimize_for_hardware(hw_info):
             config['num_workers'] = 4
             config['prefetch_factor'] = 2
 
-    # ===== APPLE METAL (MPS) CONFIGURATIONS =====
-    elif device == 'mps':
-        config['pin_memory'] = True
-
-        # Apple Silicon has unified memory architecture
-        if 'm4' in capability:
-            # M4: Latest, best performance
-            config['batch_size'] = 1536
-            config['num_workers'] = min(10, cores - 2)
-            config['prefetch_factor'] = 5
-
-        elif 'm3' in capability:
-            # M3: High performance
-            config['batch_size'] = 1024
-            config['num_workers'] = min(8, cores - 2)
-            config['prefetch_factor'] = 4
-
-        elif 'm2' in capability:
-            # M2: Good performance
-            config['batch_size'] = 768
-            config['num_workers'] = min(6, cores - 2)
-            config['prefetch_factor'] = 3
-
-        elif 'm1' in capability:
-            # M1: Still capable
-            config['batch_size'] = 512
-            config['num_workers'] = 4
-            config['prefetch_factor'] = 2
-
-        else:
-            # Generic Apple Silicon
-            config['batch_size'] = 512
-            config['num_workers'] = 4
-            config['prefetch_factor'] = 2
-
     # ===== CPU-ONLY CONFIGURATIONS =====
+    # (MPS falls through to here since we disabled it for sparse tensor compatibility)
     else:
-        # Apple Silicon CPU mode (no GPU)
-        if 'apple' in capability:
-            config['batch_size'] = 1024
-            config['num_workers'] = max(6, cores // 2)
-            config['prefetch_factor'] = 4
+        # Apple Silicon (M1/M2/M3/M4) - even though MPS is available, using CPU for compatibility
+        if 'apple' in capability or 'm1' in capability or 'm2' in capability or 'm3' in capability or 'm4' in capability:
+            # Apple Silicon with unified memory
+            # Use main process only to avoid multiprocessing issues on macOS
+            config['num_workers'] = 0
+            config['prefetch_factor'] = None
+            config['pin_memory'] = False
+
+            if 'm4' in capability:
+                config['batch_size'] = 1536
+            elif 'm3' in capability:
+                config['batch_size'] = 1024
+            elif 'm2' in capability:
+                config['batch_size'] = 768
+            elif 'm1' in capability:
+                config['batch_size'] = 512
+            else:
+                config['batch_size'] = 1024
 
         # AMD Configurations
         elif 'amd' in capability:

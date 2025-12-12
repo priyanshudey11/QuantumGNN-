@@ -44,14 +44,33 @@ class GCNLayer(nn.Module):
         # Message passing: norm[row] * norm[col]
         norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
         
-        # Sparse Matrix Multiplication: A * X
-        # PyTorch sparse tensors are (indices, values, size)
-        adj = torch.sparse_coo_tensor(
-            full_edge_index, norm, (num_nodes, num_nodes)
-        )
+        # Check for MPS device (which doesn't support sparse mm fully)
+        is_mps = x.device.type == 'mps'
         
-        # Support = A * X
-        support = torch.sparse.mm(adj, x)
+        if is_mps:
+            # Fallback to CPU for sparse operations
+            cpu_full_edge_index = full_edge_index.cpu()
+            cpu_norm = norm.cpu()
+            cpu_x = x.cpu()
+            
+            # Sparse Matrix Multiplication on CPU
+            adj = torch.sparse_coo_tensor(
+                cpu_full_edge_index, cpu_norm, (num_nodes, num_nodes)
+            )
+            support = torch.sparse.mm(adj, cpu_x)
+            
+            # Move back to MPS
+            support = support.to(x.device)
+        else:
+            # Standard execution for CPU/CUDA
+            # Sparse Matrix Multiplication: A * X
+            # PyTorch sparse tensors are (indices, values, size)
+            adj = torch.sparse_coo_tensor(
+                full_edge_index, norm, (num_nodes, num_nodes)
+            )
+            
+            # Support = A * X
+            support = torch.sparse.mm(adj, x)
         
         # Output = Support * W
         out = self.linear(support)
@@ -107,6 +126,8 @@ class QuantumInteractionLayer(nn.Module):
     """
     Optimized Quantum Circuit with BATCH EVALUATION.
     Processes multiple samples efficiently using vectorized quantum operations.
+
+    Lazy initialization to support DataLoader workers.
     """
     def __init__(self, n_qubits, n_layers, device_name='lightning.qubit'):
         super().__init__()
@@ -114,56 +135,72 @@ class QuantumInteractionLayer(nn.Module):
         self.n_layers = n_layers
         self.device_name = device_name
 
-        # Try to use lightning.gpu for speed, fallback to lightning.qubit
+        # Don't initialize quantum device/qnode in __init__ - do it lazily in forward
+        # This allows the module to be pickled for multiprocessing
+        self._dev = None
+        self._q_layer = None
+        self._initialized = False
+
+        print(f"Quantum layer created (will initialize on first forward pass)")
+        print(f"  Qubits: {n_qubits}, Layers: {n_layers}, Device: {device_name}")
+
+    def _lazy_init(self):
+        """Initialize quantum circuit on first use (makes it picklable for DataLoader workers)."""
+        if self._initialized:
+            return
+
+        # Set OpenMP threads for parallel quantum simulation
+        import os
+        n_threads = os.cpu_count()
+        os.environ['OMP_NUM_THREADS'] = str(n_threads)
+        print(f"  Setting OMP_NUM_THREADS={n_threads} for parallel quantum simulation")
+
+        # Try to use specified device, fallback to lightning.qubit
         try:
-            self.dev = qml.device(device_name, wires=n_qubits)
-            print(f"✓ Quantum device initialized: {device_name} with {n_qubits} qubits")
+            self._dev = qml.device(self.device_name, wires=self.n_qubits)
         except Exception as e:
             fallback = 'lightning.qubit'
-            print(f"⚠ Warning: {device_name} not available ({e})")
-            print(f"  Falling back to {fallback}")
-            self.dev = qml.device(fallback, wires=n_qubits)
-            self.device_name = fallback
+            print(f"Warning: {self.device_name} not available ({e}), using {fallback}")
+            self._dev = qml.device(fallback, wires=self.n_qubits)
 
         # Define single circuit for batch processing
-        # TorchLayer handles batching and differentiation automatically
-        @qml.qnode(self.dev, interface='torch', diff_method='best')
+        @qml.qnode(self._dev, interface='torch', diff_method='best')
         def circuit(inputs, weights):
             # Encode: Angle Embedding (faster than RX/RY individually)
-            qml.AngleEmbedding(inputs, wires=range(n_qubits))
-            
+            qml.AngleEmbedding(inputs, wires=range(self.n_qubits))
+
             # Variational ansatz: Strongly entangling (good expressiveness)
-            qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
-            
+            qml.StronglyEntanglingLayers(weights, wires=range(self.n_qubits))
+
             # Measure Z on first qubit (single observable = fast)
             return qml.expval(qml.PauliZ(0))
 
-        self.qnode = circuit
-
         # Initialize TorchLayer with weights
-        weight_shapes = {"weights": (n_layers, n_qubits, 3)}
-        self.q_layer = qml.qnn.TorchLayer(self.qnode, weight_shapes)
+        weight_shapes = {"weights": (self.n_layers, self.n_qubits, 3)}
+        self._q_layer = qml.qnn.TorchLayer(circuit, weight_shapes)
 
-        print(f"  Circuit depth: {n_layers} layers")
-        print(f"  Trainable parameters: {n_layers * n_qubits * 3}")
-        print(f"  Ansatz: StronglyEntanglingLayers (vectorized)")
-        print(f"  Batch processing: ENABLED ⚡")
+        self._initialized = True
 
     def forward(self, x):
         # x shape: (batch_size, n_qubits)
-        # ⚡ OPTIMIZATION: Use parallel execution for batch processing
-        batch_size = x.shape[0]
+        # Lazy initialization on first forward pass (enables OpenMP parallelization)
+        self._lazy_init()
 
-        # Option 1: Use TorchLayer (automatic batching but may be sequential)
-        outputs = self.q_layer(x)  # Shape: (batch_size,)
-
-        # Alternative parallel implementation for large batches:
-        # Uncomment below if you want to manually parallelize across CPU cores
-        # from multiprocessing import Pool
-        # with Pool() as pool:
-        #     outputs = torch.tensor(pool.map(self._eval_single, x), dtype=torch.float32)
-
+        # TorchLayer handles batching; lightning.qubit uses OpenMP for parallel execution
+        outputs = self._q_layer(x)  # Shape: (batch_size,)
         return outputs.unsqueeze(1) if outputs.dim() == 1 else outputs
+
+    def state_dict(self, *args, **kwargs):
+        """Override state_dict to handle lazy initialization."""
+        if not self._initialized:
+            self._lazy_init()
+        return super().state_dict(*args, **kwargs)
+
+    def load_state_dict(self, state_dict, *args, **kwargs):
+        """Override load_state_dict to handle lazy initialization."""
+        if not self._initialized:
+            self._lazy_init()
+        return super().load_state_dict(state_dict, *args, **kwargs)
 
 class LigandPocketQGNN(nn.Module):
     """Composite QGNN Model."""
@@ -175,7 +212,8 @@ class LigandPocketQGNN(nn.Module):
                  n_qubits=6,
                  n_qlayers=2,
                  use_quantum=True,
-                 quantum_device='lightning.qubit'):
+                 quantum_device='lightning.qubit',
+                 use_parallel=True):  # NEW: Enable parallel quantum evaluation
         super().__init__()
 
         self.use_quantum = use_quantum
@@ -186,7 +224,17 @@ class LigandPocketQGNN(nn.Module):
         self.pocket_encoder = PocketMLP(pocket_in_dim, hidden_dim, self.half_dim)
 
         if use_quantum:
-            self.interaction = QuantumInteractionLayer(n_qubits, n_qlayers, device_name=quantum_device)
+            if use_parallel:
+                # Use parallel quantum layer for multi-core processing
+                from .quantum_parallel import ParallelQuantumInteractionLayer
+                self.interaction = ParallelQuantumInteractionLayer(
+                    n_qubits, n_qlayers, device_name=quantum_device
+                )
+            else:
+                # Use standard quantum layer (single-threaded)
+                self.interaction = QuantumInteractionLayer(
+                    n_qubits, n_qlayers, device_name=quantum_device
+                )
         else:
             self.interaction = nn.Sequential(
                 nn.Linear(n_qubits, hidden_dim),

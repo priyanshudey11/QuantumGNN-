@@ -254,7 +254,7 @@ class LigandPocketDataProcessor:
             
             # If we didn't get enough, fall back to slower method
             if neg_interactions < target_negs:
-                print(f"⚠ Generated {neg_interactions}/{target_negs} negatives in batch. Filling remainder...")
+                print(f"Generated {neg_interactions}/{target_negs} negatives in batch. Filling remainder...")
                 while neg_interactions < target_negs:
                     l_id = self._rng.choice(all_ligand_ids)
                     p_id = self._rng.choice(all_pocket_ids)
@@ -284,31 +284,27 @@ class LigandPocketDataProcessor:
 
 class LigandPocketDataset(Dataset):
     def __init__(self, processor: LigandPocketDataProcessor, interactions: List[LigandPocketInteraction]):
-        self.processor = processor
+        # Store references (these will be pickled to worker processes)
+        self.ligands = processor.ligands
+        self.pockets = processor.pockets
         self.interactions = interactions
-        # Pre-cache tensor conversions for faster data loading
-        self._tensor_cache = {}
-        
+
     def __len__(self):
         return len(self.interactions)
-    
+
     def __getitem__(self, idx):
         interaction = self.interactions[idx]
-        
-        # Use cache to avoid repeated tensor conversions
-        cache_key = f"{interaction.ligand_id}_{interaction.pocket_id}"
-        if cache_key not in self._tensor_cache:
-            ligand = self.processor.ligands[interaction.ligand_id]
-            pocket = self.processor.pockets[interaction.pocket_id]
-            
-            self._tensor_cache[cache_key] = (
-                torch.from_numpy(ligand.atom_features),  # Faster than torch.tensor
-                torch.from_numpy(ligand.edge_index),
-                torch.from_numpy(pocket.to_vector()),
-                torch.tensor(interaction.label, dtype=torch.float32)
-            )
-        
-        x, edge_idx, pocket_vec, label = self._tensor_cache[cache_key]
+
+        # Fetch data and convert to tensors on-the-fly
+        # (each worker will do its own conversions)
+        ligand = self.ligands[interaction.ligand_id]
+        pocket = self.pockets[interaction.pocket_id]
+
+        x = torch.from_numpy(ligand.atom_features)
+        edge_idx = torch.from_numpy(ligand.edge_index)
+        pocket_vec = torch.from_numpy(pocket.to_vector())
+        label = torch.tensor(interaction.label, dtype=torch.float32)
+
         return x, edge_idx, pocket_vec, label
 
 def collate_fn(batch):

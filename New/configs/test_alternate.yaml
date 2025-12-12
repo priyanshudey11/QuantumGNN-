@@ -1,0 +1,57 @@
+seed: 1337
+device: cpu
+
+data:
+  pdb_dir: null
+  include_glob: null
+  exclude_glob: null
+  drugs_csv: null
+  alternate_data_path: /Users/priyanshudey/Code/Qunatum/othercode/data
+  contact_cutoff: 8.0
+  min_protein_length: 30
+  max_protein_length: 1500
+  use_interface_residues: true
+  filter_liganded_only: true
+
+sampling:
+  negatives_per_positive: 3
+  val_split: 0.1
+  test_split: 0.1
+  scaffold_seed: 42
+
+model:
+  dim: 128
+  drug_gnn:
+    layers: 2
+    conv: gin
+    dropout: 0.1
+  protein:
+    method: contact_gnn
+    dropout: 0.1
+  quantum:
+    mode: vqc
+    n_qubits: 4
+    depth: 2
+    backend: default.qubit
+    entangler: cz
+  head:
+    hidden_dims: [64]
+    dropout: 0.1
+
+train:
+  batch_size: 32
+  lr: 2e-4
+  weight_decay: 1e-5
+  epochs: 2
+  loss: bce_logit
+  warmup_epochs: 1
+  checkpoint_every: 10
+
+eval:
+  metrics: [auroc, auprc, brier]
+  bootstrap_samples: 10
+
+logging:
+  save_dir: outputs/test_alternate
+  log_every: 50
+  seed_everything: true

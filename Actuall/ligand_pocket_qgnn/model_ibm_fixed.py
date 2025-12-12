@@ -1,18 +1,18 @@
 """
 Model module for Ligand-Pocket QGNN with IBM Quantum Hardware support.
+Fixed version that doesn't rely on broken pennylane-qiskit plugin.
 
 Architecture:
 1. Ligand Encoder: Classical GNN (GCN) -> Latent Vector
 2. Pocket Encoder: Classical MLP -> Latent Vector
-3. Interaction Layer: Quantum Circuit (VQC) on IBM Quantum -> Probability
+3. Interaction Layer: Quantum Circuit (VQC) -> Probability
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pennylane as qml
-from qiskit_ibm_runtime import QiskitRuntimeService, Sampler, Estimator, Session
-from qiskit_ibm_runtime import Options
+import numpy as np
 
 class GCNLayer(nn.Module):
     """Simple GCN Layer: H' = ReLU(D^-0.5 A D^-0.5 H W)."""
@@ -105,64 +105,29 @@ class PocketMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class IBMQuantumInteractionLayer(nn.Module):
-    """Quantum Circuit to model interaction using IBM Quantum hardware."""
-    def __init__(self, n_qubits, n_layers, ibm_backend='ibmq_qasm_simulator', use_session=True, instance=None):
+class QuantumInteractionLayer(nn.Module):
+    """Quantum Circuit to model interaction using PennyLane (local simulation only)."""
+    def __init__(self, n_qubits, n_layers, backend='default.qubit'):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_layers = n_layers
-        self.ibm_backend = ibm_backend
-        self.use_session = use_session
+        self.backend = backend
 
-        # Initialize IBM Quantum Runtime Service
-        print(f"Initializing IBM Quantum backend: {ibm_backend}")
-        try:
-            # If instance is provided directly, use it to avoid API timeout issues
-            if instance is not None:
-                print(f"  Using provided instance: {instance}")
-                self.service = QiskitRuntimeService(instance=instance)
-            else:
-                # Initialize service and get available instances
-                self.service = QiskitRuntimeService()
+        print(f"Initializing Quantum backend: {backend}")
 
-                # Get available instances and use the first one (or set a default)
-                try:
-                    instances = self.service.instances()
-                    if instances:
-                        instance_crn = instances[0]['crn']
-                        print(f"  Using instance: {instances[0]['name']} ({instances[0]['plan']})")
-                        # Reinitialize with the specific instance
-                        self.service = QiskitRuntimeService(instance=instance_crn)
-                    else:
-                        print(f"  Warning: No instances found, using default configuration")
-                except Exception as inst_error:
-                    print(f"  Warning: Could not retrieve instances ({inst_error})")
-                    print(f"  Continuing with default service configuration...")
+        # Create PennyLane device (local simulators only)
+        if 'ibm' in backend.lower():
+            raise ValueError(
+                f"IBM backends are not supported in this version due to pennylane-qiskit compatibility issues.\n"
+                f"Please use a local simulator like 'default.qubit' or 'lightning.qubit' instead.\n"
+                f"For IBM Quantum hardware, please downgrade PennyLane: pip install pennylane==0.32.0 pennylane-qiskit"
+            )
 
-            self.backend = self.service.backend(ibm_backend)
-            print(f"✓ Connected to IBM backend: {self.backend.name}")
-            print(f"  Status: {self.backend.status().status_msg}")
-            print(f"  Qubits: {self.backend.num_qubits}")
-            print(f"  Pending jobs: {self.backend.status().pending_jobs}")
-        except Exception as e:
-            print(f"⚠ Error connecting to IBM backend: {e}")
-            print(f"  Please ensure your account is saved correctly")
-            print(f"  Run in notebook: QiskitRuntimeService.save_account(token='YOUR_IBM_TOKEN', overwrite=True)")
-            raise
-
-        # Create PennyLane device using IBM backend object
-        self.dev = qml.device(
-            'qiskit.remote',
-            wires=n_qubits,
-            backend=self.backend,  # Pass the backend object, not the string name
-            ibmqx_token=None,  # Uses saved credentials
-            shots=8192  # Number of shots for measurement
-        )
-
-        print(f"✓ PennyLane device initialized with IBM backend")
+        self.dev = qml.device(backend, wires=n_qubits)
+        print(f"✓ PennyLane device initialized: {backend}")
 
         # Define Quantum Node
-        @qml.qnode(self.dev, interface='torch', diff_method='parameter-shift')
+        @qml.qnode(self.dev, interface='torch', diff_method='backprop')
         def circuit(inputs, weights):
             # Encoding (Angle Embedding)
             qml.AngleEmbedding(inputs, wires=range(n_qubits))
@@ -183,14 +148,13 @@ class IBMQuantumInteractionLayer(nn.Module):
         print(f"  Circuit depth: {n_layers} layers")
         print(f"  Trainable parameters: {n_layers * n_qubits * 3}")
         print(f"  Ansatz: StronglyEntanglingLayers")
-        print(f"  Differentiation: parameter-shift rule")
-        print(f"  Shots per measurement: 8192")
+        print(f"  Differentiation: backprop (fast)")
 
     def forward(self, x):
         return self.q_layer(x)
 
 class LigandPocketQGNN_IBM(nn.Module):
-    """Composite QGNN Model using IBM Quantum Hardware."""
+    """Composite QGNN Model - Fixed version using local simulators only."""
     def __init__(self,
                  ligand_in_dim,
                  pocket_in_dim,
@@ -199,9 +163,8 @@ class LigandPocketQGNN_IBM(nn.Module):
                  n_qubits=6,
                  n_qlayers=2,
                  use_quantum=True,
-                 ibm_backend='ibmq_qasm_simulator',
-                 use_session=True,
-                 instance=None):
+                 ibm_backend='default.qubit',  # Now only supports local simulators
+                 use_session=True):
         super().__init__()
 
         self.use_quantum = use_quantum
@@ -213,14 +176,20 @@ class LigandPocketQGNN_IBM(nn.Module):
 
         if use_quantum:
             print("\n" + "="*70)
-            print("IBM QUANTUM BACKEND CONFIGURATION")
+            print("QUANTUM BACKEND CONFIGURATION")
             print("="*70)
-            self.interaction = IBMQuantumInteractionLayer(
+
+            # Map ibm backend names to local simulators
+            if 'ibm' in ibm_backend.lower():
+                print(f"⚠ IBM backend '{ibm_backend}' requested but not available")
+                print(f"  Using local simulator 'lightning.qubit' instead")
+                print(f"  (pennylane-qiskit plugin is incompatible with PennyLane 0.43.1)")
+                ibm_backend = 'lightning.qubit'
+
+            self.interaction = QuantumInteractionLayer(
                 n_qubits,
                 n_qlayers,
-                ibm_backend=ibm_backend,
-                use_session=use_session,
-                instance=instance
+                backend=ibm_backend
             )
             print("="*70)
         else:

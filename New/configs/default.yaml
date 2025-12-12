@@ -1,0 +1,70 @@
+seed: 1337
+device: cpu
+
+data:
+  # Standard data path (set pdb_dir to use generated/custom data)
+  pdb_dir: data/pdb
+  include_glob: data/includes/*liganded_*.csv
+  exclude_glob: data/excludes/without_*.txt
+  drugs_csv: data/drugs.csv
+  ligand_lookup_csv: data/ligand_lookup.csv  # optional
+
+  # Alternate data path (nested structure with results/)
+  # Set to non-null to use instead of pdb_dir
+  alternate_data_path: null  # e.g., /Users/priyanshudey/Code/Qunatum/othercode/data
+
+  # Data processing options
+  contact_cutoff: 8.0
+  min_protein_length: 30
+  max_protein_length: 1500
+  use_interface_residues: true  # Use interface residues if available from alternate loader
+  filter_liganded_only: true    # If true, exclude protein-only complexes
+
+sampling:
+  negatives_per_positive: 5
+  val_split: 0.15
+  test_split: 0.15
+  scaffold_seed: 42
+
+model:
+  dim: 256
+  drug_gnn:
+    layers: 4
+    conv: gin  # gin | gat
+    dropout: 0.1
+  protein:
+    method: contact_gnn   # contact_gnn | seq_cnn | esm
+    dropout: 0.1
+  quantum:
+    mode: vqc              # vqc | kernel
+    n_qubits: 8
+    depth: 3
+    backend: default.qubit
+    entangler: cz          # cz | cnot
+  head:
+    hidden_dims: [128, 64]
+    dropout: 0.1
+
+train:
+  batch_size: 64
+  lr: 2e-4
+  weight_decay: 1e-5
+  epochs: 20
+  loss: bce_logit  # bce_logit | pairwise_hinge | info_nce
+  warmup_epochs: 2
+  checkpoint_every: 5
+
+eval:
+  metrics: [auroc, auprc, brier, ece]
+  bootstrap_samples: 100
+
+ablations:
+  - classical_mlp_only
+  - quantum_only
+  - full_model
+  - no_contact_graph
+
+logging:
+  save_dir: outputs
+  log_every: 100
+  seed_everything: true

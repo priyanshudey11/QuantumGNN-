@@ -217,11 +217,45 @@ class LigandPocketDataProcessor:
         print(f"Generating negative samples (target: {pos_interactions})...")
         neg_interactions = 0
         if loaded_pockets > 0 and loaded_ligands > 0:
-            all_ligand_ids = list(self.ligands.keys())
-            all_pocket_ids = list(self.pockets.keys())
+            all_ligand_ids = np.array(list(self.ligands.keys()))
+            all_pocket_ids = np.array(list(self.pockets.keys()))
             
-            with tqdm(total=pos_interactions, desc="Generating Negatives") as pbar:
-                while neg_interactions < pos_interactions:
+            # Vectorized negative sampling: much faster!
+            # Generate more candidates than needed and filter duplicates
+            n_ligands = len(all_ligand_ids)
+            n_pockets = len(all_pocket_ids)
+            target_negs = pos_interactions
+            
+            # Generate candidates in bulk (with padding for duplicates)
+            batch_size = min(10000, max(target_negs * 2, 5000))  # Adaptive batch size
+            neg_ligand_indices = self._rng.randint(0, n_ligands, size=batch_size)
+            neg_pocket_indices = self._rng.randint(0, n_pockets, size=batch_size)
+            
+            pbar = tqdm(total=target_negs, desc="Generating Negatives")
+            
+            for i in range(batch_size):
+                if neg_interactions >= target_negs:
+                    break
+                    
+                l_id = all_ligand_ids[neg_ligand_indices[i]]
+                p_id = all_pocket_ids[neg_pocket_indices[i]]
+                
+                if (l_id, p_id) not in existing_pairs:
+                    interaction = LigandPocketInteraction(
+                        ligand_id=l_id,
+                        pocket_id=p_id,
+                        label=0.0,
+                        interaction_type="non_binding"
+                    )
+                    self.interactions.append(interaction)
+                    existing_pairs.add((l_id, p_id))
+                    neg_interactions += 1
+                    pbar.update(1)
+            
+            # If we didn't get enough, fall back to slower method
+            if neg_interactions < target_negs:
+                print(f"⚠ Generated {neg_interactions}/{target_negs} negatives in batch. Filling remainder...")
+                while neg_interactions < target_negs:
                     l_id = self._rng.choice(all_ligand_ids)
                     p_id = self._rng.choice(all_pocket_ids)
                     if (l_id, p_id) not in existing_pairs:
@@ -235,6 +269,8 @@ class LigandPocketDataProcessor:
                         existing_pairs.add((l_id, p_id))
                         neg_interactions += 1
                         pbar.update(1)
+            
+            pbar.close()
                         
         print(f"Loaded {loaded_pockets} pockets, {loaded_ligands} ligands")
         print(f"Interactions: {pos_interactions} positive, {neg_interactions} negative")
@@ -250,61 +286,59 @@ class LigandPocketDataset(Dataset):
     def __init__(self, processor: LigandPocketDataProcessor, interactions: List[LigandPocketInteraction]):
         self.processor = processor
         self.interactions = interactions
+        # Pre-cache tensor conversions for faster data loading
+        self._tensor_cache = {}
         
     def __len__(self):
         return len(self.interactions)
     
     def __getitem__(self, idx):
         interaction = self.interactions[idx]
-        ligand = self.processor.ligands[interaction.ligand_id]
-        pocket = self.processor.pockets[interaction.pocket_id]
         
-        # Return raw numpy arrays, converted to tensors
-        return (
-            torch.tensor(ligand.atom_features, dtype=torch.float32),
-            torch.tensor(ligand.edge_index, dtype=torch.long),
-            torch.tensor(pocket.to_vector(), dtype=torch.float32),
-            torch.tensor(interaction.label, dtype=torch.float32)
-        )
+        # Use cache to avoid repeated tensor conversions
+        cache_key = f"{interaction.ligand_id}_{interaction.pocket_id}"
+        if cache_key not in self._tensor_cache:
+            ligand = self.processor.ligands[interaction.ligand_id]
+            pocket = self.processor.pockets[interaction.pocket_id]
+            
+            self._tensor_cache[cache_key] = (
+                torch.from_numpy(ligand.atom_features),  # Faster than torch.tensor
+                torch.from_numpy(ligand.edge_index),
+                torch.from_numpy(pocket.to_vector()),
+                torch.tensor(interaction.label, dtype=torch.float32)
+            )
+        
+        x, edge_idx, pocket_vec, label = self._tensor_cache[cache_key]
+        return x, edge_idx, pocket_vec, label
 
 def collate_fn(batch):
     """
-    Custom collate to batch graphs.
+    Optimized custom collate to batch graphs.
     Batch: List of (x, edge_index, pocket_vec, label)
+    Uses vectorized operations instead of loops for speed.
     """
-    x_list = []
-    edge_index_list = []
-    pocket_list = []
-    label_list = []
+    x_list, edge_index_list, pocket_list, label_list = zip(*batch)
+    
+    # Pre-allocate batch indices
     batch_idx_list = []
-    
     node_offset = 0
+    edge_index_shifted_list = []
     
-    for i, (x, edge_index, pocket, label) in enumerate(batch):
+    # Single pass through batch with index shifting
+    for i, (x, edge_index) in enumerate(zip(x_list, edge_index_list)):
         num_nodes = x.shape[0]
-        
-        x_list.append(x)
         
         # Shift edge indices
         if edge_index.shape[1] > 0:
-            edge_index_shifted = edge_index + node_offset
-            edge_index_list.append(edge_index_shifted)
-            
-        # Batch index (for pooling)
+            edge_index_shifted_list.append(edge_index + node_offset)
+        
+        # Batch index for pooling
         batch_idx_list.append(torch.full((num_nodes,), i, dtype=torch.long))
-        
-        pocket_list.append(pocket)
-        label_list.append(label)
-        
         node_offset += num_nodes
-        
-    # Concatenate
+    
+    # Concatenate all in one go
     x_batch = torch.cat(x_list, dim=0)
-    if edge_index_list:
-        edge_index_batch = torch.cat(edge_index_list, dim=1)
-    else:
-        edge_index_batch = torch.zeros((2, 0), dtype=torch.long)
-        
+    edge_index_batch = torch.cat(edge_index_shifted_list, dim=1) if edge_index_shifted_list else torch.zeros((2, 0), dtype=torch.long)
     batch_vec = torch.cat(batch_idx_list, dim=0)
     pocket_batch = torch.stack(pocket_list)
     label_batch = torch.stack(label_list)

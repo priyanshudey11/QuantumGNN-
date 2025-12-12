@@ -1,0 +1,6 @@
+# Stage 2: PyTorch Geometric and extensions (require torch to be installed)
+torch-geometric>=2.4.0
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv

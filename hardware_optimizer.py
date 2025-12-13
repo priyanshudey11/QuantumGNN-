@@ -189,11 +189,8 @@ def detect_hardware():
 
 
 def optimize_for_hardware(hw_info):
-    """
-    Determine optimal training configuration based on hardware.
-    Returns optimized batch size, workers, prefetch, etc.
-    """
-
+    # Determine optimal training configuration based on hardware.
+    # Returns optimized batch size, workers, prefetch, etc.
     device = hw_info['device']
     capability = hw_info['compute_capability']
     mem_gb = hw_info['memory_gb']
@@ -208,7 +205,7 @@ def optimize_for_hardware(hw_info):
         'persistent_workers': True
     }
 
-    # ===== NVIDIA CUDA CONFIGURATIONS =====
+    # NVIDIA CUDA CONFIGURATIONS 
     if device == 'cuda':
         config['pin_memory'] = True
         config['quantum_device'] = 'lightning.gpu'

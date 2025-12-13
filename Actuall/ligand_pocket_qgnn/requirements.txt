@@ -1,60 +1,23 @@
-# QuantumGNN Requirements
-# Tested on: Python 3.11, CUDA 12.x, NVIDIA RTX 3080
-
 # Core Deep Learning
-torch==2.9.1  # PyTorch with CUDA support
-numpy==2.3.4
-pandas==2.3.3
-scikit-learn==1.7.2
+torch>=2.0.0
+numpy
+pandas
+scikit-learn
 
-# Quantum Computing (GPU-accelerated)
-pennylane==0.43.1
-pennylane-lightning==0.43.0
-pennylane-lightning-gpu==0.43.0  # IMPORTANT: Requires CUDA
+# Quantum Computing
+pennylane>=0.30.0
+pennylane-lightning
+pennylane-lightning-gpu
+qiskit-ibm-runtime
 
 # Visualization
-matplotlib==3.10.7
-seaborn>=0.12.0
+matplotlib
+seaborn
 
 # Progress Bars
-tqdm==4.67.1
+tqdm
 
 # Jupyter Notebook Support
-jupyter>=1.0.0
-jupyterlab>=4.5.0
-ipykernel>=6.25.0
-ipywidgets>=8.0.0
-
-# Data Processing (Optional - for data generation)
-# rdkit>=2023.3.0  # Uncomment if processing molecular structures
-# biopython>=1.81  # Uncomment if processing protein structures
-
-# ============================================================================
-# Installation Instructions
-# ============================================================================
-#
-# 1. Create conda environment:
-#    conda create -n quantum python=3.11
-#    conda activate quantum
-#
-# 2. Install PyTorch with CUDA support:
-#    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-#
-# 3. Install PennyLane with GPU support:
-#    pip install pennylane pennylane-lightning pennylane-lightning-gpu
-#
-# 4. Install remaining requirements:
-#    pip install -r requirements.txt
-#
-# 5. Verify GPU setup:
-#    python test_gpu_setup.py
-#
-# ============================================================================
-# Notes
-# ============================================================================
-# - pennylane-lightning-gpu requires NVIDIA GPU with CUDA support
-# - If you don't have a CUDA GPU, remove pennylane-lightning-gpu and use
-#   QUANTUM_DEVICE = 'lightning.qubit' (CPU) instead
-# - Set NUM_WORKERS = 0 in training config to avoid multiprocessing issues
-#   with quantum circuits
-# ============================================================================
+jupyter
+ipykernel
+ipywidgets

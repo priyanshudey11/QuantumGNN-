@@ -1,19 +1,10 @@
-"""
-Model module for Ligand-Pocket QGNN.
-
-Architecture:
-1. Ligand Encoder: Classical GNN (GCN) -> Latent Vector
-2. Pocket Encoder: Classical MLP -> Latent Vector
-3. Interaction Layer: Quantum Circuit (VQC) -> Probability
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pennylane as qml
 
 class GCNLayer(nn.Module):
-    """Simple GCN Layer: H' = ReLU(D^-0.5 A D^-0.5 H W)."""
+    # Simple GCN Layer: H' = ReLU(D^-0.5 A D^-0.5 H W).
     def __init__(self, in_features, out_features):
         super().__init__()
         self.linear = nn.Linear(in_features, out_features)
@@ -25,7 +16,6 @@ class GCNLayer(nn.Module):
         num_nodes = x.shape[0]
         
         # Create adjacency matrix (sparse)
-        # Add self-loops
         loops = torch.arange(num_nodes, device=x.device)
         loop_index = torch.stack([loops, loops])
         
@@ -77,7 +67,7 @@ class GCNLayer(nn.Module):
         return out
 
 class LigandGNN(nn.Module):
-    """Classical GNN to encode Ligand Graph into a vector."""
+    # Classical GNN to encode Ligand Graph into a vector.
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.conv1 = GCNLayer(input_dim, hidden_dim)
@@ -108,7 +98,7 @@ class LigandGNN(nn.Module):
         return x
 
 class PocketMLP(nn.Module):
-    """Classical MLP to encode Pocket Features into a vector."""
+    # Classical MLP to encode Pocket Features into a vector.
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.net = nn.Sequential(
@@ -123,12 +113,7 @@ class PocketMLP(nn.Module):
         return self.net(x)
 
 class QuantumInteractionLayer(nn.Module):
-    """
-    Optimized Quantum Circuit with BATCH EVALUATION.
-    Processes multiple samples efficiently using vectorized quantum operations.
-
-    Lazy initialization to support DataLoader workers.
-    """
+    # Processes multiple samples efficiently using vectorized quantum operations.
     def __init__(self, n_qubits, n_layers, device_name='lightning.qubit'):
         super().__init__()
         self.n_qubits = n_qubits
@@ -191,19 +176,19 @@ class QuantumInteractionLayer(nn.Module):
         return outputs.unsqueeze(1) if outputs.dim() == 1 else outputs
 
     def state_dict(self, *args, **kwargs):
-        """Override state_dict to handle lazy initialization."""
+        # Override state_dict to handle lazy initialization.
         if not self._initialized:
             self._lazy_init()
         return super().state_dict(*args, **kwargs)
 
     def load_state_dict(self, state_dict, *args, **kwargs):
-        """Override load_state_dict to handle lazy initialization."""
+        # Override load_state_dict to handle lazy initialization.
         if not self._initialized:
             self._lazy_init()
         return super().load_state_dict(state_dict, *args, **kwargs)
 
 class LigandPocketQGNN(nn.Module):
-    """Composite QGNN Model."""
+    # Composite QGNN Model.
     def __init__(self,
                  ligand_in_dim,
                  pocket_in_dim,
@@ -213,7 +198,7 @@ class LigandPocketQGNN(nn.Module):
                  n_qlayers=2,
                  use_quantum=True,
                  quantum_device='lightning.qubit',
-                 use_parallel=True):  # NEW: Enable parallel quantum evaluation
+                 use_parallel=True): 
         super().__init__()
 
         self.use_quantum = use_quantum

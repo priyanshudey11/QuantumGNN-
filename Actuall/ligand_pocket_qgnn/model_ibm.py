@@ -1,12 +1,3 @@
-"""
-Model module for Ligand-Pocket QGNN with IBM Quantum Hardware support.
-
-Architecture:
-1. Ligand Encoder: Classical GNN (GCN) -> Latent Vector
-2. Pocket Encoder: Classical MLP -> Latent Vector
-3. Interaction Layer: Quantum Circuit (VQC) on IBM Quantum -> Probability
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +6,7 @@ from qiskit_ibm_runtime import QiskitRuntimeService, Sampler, Estimator, Session
 from qiskit_ibm_runtime import Options
 
 class GCNLayer(nn.Module):
-    """Simple GCN Layer: H' = ReLU(D^-0.5 A D^-0.5 H W)."""
+    # Simple GCN Layer: H' = ReLU(D^-0.5 A D^-0.5 H W).
     def __init__(self, in_features, out_features):
         super().__init__()
         self.linear = nn.Linear(in_features, out_features)
@@ -60,7 +51,7 @@ class GCNLayer(nn.Module):
         return out
 
 class LigandGNN(nn.Module):
-    """Classical GNN to encode Ligand Graph into a vector."""
+    # Classical GNN to encode Ligand Graph into a vector.
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.conv1 = GCNLayer(input_dim, hidden_dim)
@@ -91,7 +82,7 @@ class LigandGNN(nn.Module):
         return x
 
 class PocketMLP(nn.Module):
-    """Classical MLP to encode Pocket Features into a vector."""
+    # Classical MLP to encode Pocket Features into a vector.
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.net = nn.Sequential(
@@ -106,7 +97,7 @@ class PocketMLP(nn.Module):
         return self.net(x)
 
 class IBMQuantumInteractionLayer(nn.Module):
-    """Quantum Circuit to model interaction using IBM Quantum hardware."""
+    # Quantum Circuit to model interaction using IBM Quantum hardware.
     def __init__(self, n_qubits, n_layers, ibm_backend='ibmq_qasm_simulator', use_session=True, instance=None):
         super().__init__()
         self.n_qubits = n_qubits

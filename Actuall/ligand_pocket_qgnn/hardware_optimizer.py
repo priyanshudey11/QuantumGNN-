@@ -3,14 +3,7 @@ import os
 import multiprocessing as mp
 import platform
 
-def setup_environment():
-    """
-    Detects hardware and returns optimized configuration.
-    Returns:
-        hw_info (dict): Device information
-        hw_config (dict): DataLoader and Model configuration
-    """
-    
+def setup_environment():    
     # 1. Detect Device
     if torch.cuda.is_available():
         device = 'cuda'

@@ -1,12 +1,10 @@
-"""
-Data processing module for Ligand-Pocket QGNN Pipeline.
 
-This module provides:
-- PocketFeatures: Data class for protein pocket 3D descriptors
-- LigandGraph: Data class for ligand graph (atoms and bonds)
-- LigandPocketInteraction: Data class for interaction records
-- LigandPocketDataProcessor: Main data loading and processing class
-"""
+# Data processing module for Ligand-Pocket QGNN Pipeline.
+# - PocketFeatures: Data class for protein pocket 3D descriptors
+# - LigandGraph: Data class for ligand graph (atoms and bonds)
+# - LigandPocketInteraction: Data class for interaction records
+# - LigandPocketDataProcessor: Main data loading and processing class
+
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple, Set
@@ -20,9 +18,6 @@ from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import Dataset
 
-# ==========================================
-# Data Structures
-# ==========================================
 
 @dataclass
 class PocketFeatures:
@@ -58,7 +53,7 @@ class PocketFeatures:
 
 @dataclass
 class LigandGraph:
-    """Ligand (drug) graph representation."""
+    #Ligand (drug) graph representation.
     ligand_id: str
     atom_features: np.ndarray  # (N, F)
     edge_index: np.ndarray     # (2, E)
@@ -69,18 +64,15 @@ class LigandGraph:
 
 @dataclass
 class LigandPocketInteraction:
-    """Interaction between a ligand and a pocket."""
+    # Interaction between a ligand and a pocket.
     ligand_id: str
     pocket_id: str
     label: float
     interaction_type: str = "unknown"
 
-# ==========================================
-# Parsers
-# ==========================================
 
 class Mol2GraphParser:
-    """Parses MOL2 files into graph structures (Atoms + Bonds)."""
+    # Parses MOL2 files into graph structures (Atoms + Bonds).
     ATOM_TYPES = ['C', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I', 'H']
     
     @staticmethod
@@ -151,9 +143,7 @@ class Mol2GraphParser:
             # print(f"Error parsing {filepath}: {e}")
             return None
 
-# ==========================================
 # Data Processor
-# ==========================================
 
 class LigandPocketDataProcessor:
     def __init__(self, data_dir: str, seed: int = 42):
@@ -278,9 +268,7 @@ class LigandPocketDataProcessor:
     def get_dataset(self):
         return self.interactions
 
-# ==========================================
 # PyTorch Dataset & Collate
-# ==========================================
 
 class LigandPocketDataset(Dataset):
     def __init__(self, processor: LigandPocketDataProcessor, interactions: List[LigandPocketInteraction]):
@@ -308,11 +296,9 @@ class LigandPocketDataset(Dataset):
         return x, edge_idx, pocket_vec, label
 
 def collate_fn(batch):
-    """
-    Optimized custom collate to batch graphs.
-    Batch: List of (x, edge_index, pocket_vec, label)
-    Uses vectorized operations instead of loops for speed.
-    """
+    # Optimized custom collate to batch graphs.
+    # Batch: List of (x, edge_index, pocket_vec, label)
+    # Uses vectorized operations instead of loops for speed.
     x_list, edge_index_list, pocket_list, label_list = zip(*batch)
     
     # Pre-allocate batch indices

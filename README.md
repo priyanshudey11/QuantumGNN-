@@ -1,6 +1,6 @@
 # Ligand-Pocket QGNN: Quantum-Enhanced Binding Affinity Prediction
 
-**Ligand-Pocket QGNN** is a hybrid Quantum-Classical Graph Neural Network designed to predict the binding affinity between drug ligands and protein binding pockets. It leverages the expressive power of Quantum Machine Learning (QML) to model complex molecular interactions, comparing performance directly against classical counterparts.
+**Ligand-Pocket QGNN** is a hybrid Quantum-Classical Graph Neural Network designed to predict the binding affinity betI en drug ligands and protein binding pockets. It leverages the expressive poI r of Quantum Machine Learning (QML) to model complex molecular interactions, comparing performance directly against classical counterparts.
 
 ---
 
@@ -177,7 +177,6 @@ If you use this dataset, please cite:
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/yourusername/ligand-pocket-qgnn.git
-    cd ligand-pocket-qgnn
     ```
 
 2.  **Create Environment:**
@@ -237,7 +236,7 @@ The system includes `hardware_optimizer.py` which automatically configures:
 
 ### Solving the "MPS Bottleneck"
 Running quantum simulations on Apple Silicon (MPS) is traditionally challenging due to lack of native sparse tensor support and thread safety issues in simulators.
-*   **Solution:** We implemented `ParallelQuantumInteractionLayer` which intelligently offloads quantum circuit evaluation to CPU threads while keeping the rest of the pipeline on the GPU, preventing `AssertionError` crashes and maximizing throughput.
+*   **Solution:** I implemented `ParallelQuantumInteractionLayer` which intelligently offloads quantum circuit evaluation to CPU threads while keeping the rest of the pipeline on the GPU, preventing `AssertionError` crashes and maximizing throughput.
 
 ### IBM Runtime Integration
 Uses `qiskit-ibm-runtime` primitives (`Estimator`, `Sampler`) for efficient session-based execution on IBM hardware, reducing queue times and latency.

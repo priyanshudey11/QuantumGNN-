@@ -1,0 +1,38 @@
+{
+  "experiment_name": "spark_classical_q4_l2_20251116_162436",
+  "timestamp": "20251116_162436",
+  "spark": {
+    "master": "local[*]",
+    "driver_memory": "8g",
+    "executor_memory": "4g",
+    "num_executors": 4,
+    "partitions": 1263
+  },
+  "data": {
+    "data_dir": "/media/priyanshu/SD/othercode/data",
+    "max_drugs": null,
+    "n_patients": 200,
+    "interaction_rate": 0.05,
+    "train_samples": 100826,
+    "val_samples": 25534
+  },
+  "model": {
+    "num_qubits": 4,
+    "num_qlayers": 2,
+    "hidden_dim": 64,
+    "use_quantum": false
+  },
+  "training": {
+    "epochs": 100,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "val_split": 0.2
+  },
+  "results": {
+    "final_train_loss": 7.808140277862549,
+    "final_train_acc": 0.734375,
+    "final_val_loss": 10.356406211853027,
+    "final_val_acc": 0.59375,
+    "final_val_auc": 0.5232793522267206
+  }
+}

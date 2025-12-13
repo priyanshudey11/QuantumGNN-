@@ -1,0 +1,14 @@
+{
+  "experiment_name": "spark_quantum_q6_l6_20251130_161714",
+  "timestamp": "20251130_161714",
+  "mode": "quantum",
+  "num_qubits": 6,
+  "num_qlayers": 6,
+  "epochs": 20,
+  "batch_size": 128,
+  "learning_rate": 0.0001,
+  "val_split": 0.2,
+  "seed": 42,
+  "max_drugs": 2000,
+  "interaction_rate": 0.05
+}

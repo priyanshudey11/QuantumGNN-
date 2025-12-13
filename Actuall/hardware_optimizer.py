@@ -1,8 +1,3 @@
-"""
-Automatic Hardware Detection and Optimization
-Supports: Intel, AMD, NVIDIA, Apple Silicon, Snapdragon, and more
-"""
-
 import os
 import platform
 import subprocess
@@ -11,7 +6,7 @@ import multiprocessing as mp
 
 
 def detect_hardware():
-    """Automatically detect and characterize hardware configuration."""
+    # Automatically detect and characterize hardware configuration.
 
     hw_info = {
         'platform': platform.system(),
@@ -24,7 +19,7 @@ def detect_hardware():
         'compute_capability': 'generic'
     }
 
-    # ===== CPU Detection =====
+    # CPU Detection
     try:
         if platform.system() == 'Darwin':  # macOS
             brand = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string'],
@@ -283,7 +278,7 @@ def optimize_for_hardware(hw_info):
             config['num_workers'] = 4
             config['prefetch_factor'] = 2
 
-    # ===== CPU-ONLY CONFIGURATIONS =====
+    # CPU-ONLY CONFIGURATIONS
     else:
         # Apple Silicon CPU mode (no GPU)
         if 'apple' in capability:
@@ -381,7 +376,7 @@ def optimize_for_hardware(hw_info):
 
 
 def print_hardware_info(hw_info, config):
-    """Pretty print detected hardware and configuration."""
+    # Pretty print detected hardware and configuration.
     print(f"\n{'='*70}")
     print(f"HARDWARE DETECTED")
     print(f"{'='*70}")
@@ -404,10 +399,6 @@ def print_hardware_info(hw_info, config):
 
 
 def setup_environment():
-    """
-    Complete hardware detection and environment setup.
-    Returns (hw_info, config) tuple.
-    """
     hw_info = detect_hardware()
     config = optimize_for_hardware(hw_info)
     print_hardware_info(hw_info, config)

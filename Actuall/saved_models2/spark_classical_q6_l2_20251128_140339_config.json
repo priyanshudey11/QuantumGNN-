@@ -1,0 +1,15 @@
+{
+  "experiment_name": "spark_classical_q6_l2_20251128_140339",
+  "timestamp": "20251128_140339",
+  "mode": "classical",
+  "num_qubits": 6,
+  "num_qlayers": 2,
+  "epochs": 100,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "val_split": 0.2,
+  "seed": 42,
+  "max_drugs": null,
+  "n_patients": 200,
+  "interaction_rate": 0.05
+}

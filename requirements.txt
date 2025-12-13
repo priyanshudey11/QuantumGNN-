@@ -1,0 +1,23 @@
+# Core Deep Learning
+torch>=2.0.0
+numpy
+pandas
+scikit-learn
+
+# Quantum Computing
+pennylane>=0.30.0
+pennylane-lightning
+pennylane-lightning-gpu
+qiskit-ibm-runtime
+
+# Visualization
+matplotlib
+seaborn
+
+# Progress Bars
+tqdm
+
+# Jupyter Notebook Support
+jupyter
+ipykernel
+ipywidgets

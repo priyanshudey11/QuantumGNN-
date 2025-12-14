@@ -19,7 +19,6 @@ jupyter notebook test.ipynb  # Run all cells
 
 This trains both quantum and classical models and generates comparison plots.
 
-**Full documentation**: [WIKI.md](WIKI.md)
 
 ---
 

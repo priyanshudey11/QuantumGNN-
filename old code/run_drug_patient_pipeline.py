@@ -29,8 +29,7 @@ def quick_demo():
     """
     Quick demonstration using your existing data
     """
-    print("\n" + "="*70)
-    print("DRUG-PATIENT INTERACTION PIPELINE - QUICK START")
+       print("DRUG-PATIENT INTERACTION PIPELINE - QUICK START")
     print("="*70 + "\n")
 
     # Configuration
@@ -68,14 +67,14 @@ def quick_demo():
         print("     data/1a0n/results/1a0n--A--P27986__Repair-H_descriptors_3d.csv")
         return False
 
-    print(f"✓ Loaded {len(drug_descriptors)} drug compounds")
+    print(f" Loaded {len(drug_descriptors)} drug compounds")
 
     # Step 3: Create patient data
     print("\nStep 3: Creating patient profiles...")
     print("   NOTE: Using synthetic patient data for demonstration")
     print("   Replace this with real patient data from your EHR/clinical database")
     processor.create_synthetic_patient_data(n_patients=N_PATIENTS)
-    print(f"✓ Created {N_PATIENTS} patient profiles")
+    print(f" Created {N_PATIENTS} patient profiles")
 
     # Step 4: Create drug-patient interactions
     print("\nStep 4: Creating drug-patient interaction records...")
@@ -88,7 +87,7 @@ def quick_demo():
         print("\nERROR: No interactions created!")
         return False
 
-    print(f"✓ Created {n_interactions} drug-patient interactions")
+    print(f" Created {n_interactions} drug-patient interactions")
 
     # Step 5: Prepare graph
     graph = processor.graph
@@ -106,7 +105,7 @@ def quick_demo():
     print("\nStep 5: Saving processed graph...")
     graph_file = "drug_patient_graph.pkl"
     processor.save_graph(graph_file)
-    print(f"✓ Graph saved to {graph_file}")
+    print(f" Graph saved to {graph_file}")
 
     # Step 7: Initialize quantum GNN model
     print("\nStep 6: Initializing Quantum GNN model...")
@@ -126,10 +125,10 @@ def quick_demo():
 
         # Check if quantum circuits are available
         if hasattr(model, 'qlayer'):
-            print(f"✓ Quantum GNN initialized with {NUM_QUBITS} qubits")
+            print(f" Quantum GNN initialized with {NUM_QUBITS} qubits")
             print(f"  Quantum device: default.qubit")
         else:
-            print(f"✓ Classical GNN initialized (PennyLane not available)")
+            print(f" Classical GNN initialized (PennyLane not available)")
 
     except Exception as e:
         print(f" Error initializing model: {e}")
@@ -147,7 +146,7 @@ def quick_demo():
             epochs=EPOCHS,
             val_split=0.2
         )
-        print("\n✓ Training complete!")
+        print("\n Training complete!")
 
     except Exception as e:
         print(f"\n Training error: {e}")
@@ -157,7 +156,7 @@ def quick_demo():
     print("\nStep 8: Saving trained model...")
     model_file = "quantum_drug_patient_model.pt"
     torch.save(model.state_dict(), model_file)
-    print(f"✓ Model saved to {model_file}")
+    print(f" Model saved to {model_file}")
 
     # Step 10: Test prediction on a sample
     print("\nStep 9: Testing prediction on sample drug-patient pair...")
@@ -171,7 +170,7 @@ def quick_demo():
         prediction = model(sample_drug_features, sample_patient_features)
         probability = prediction.item()
 
-    print(f"✓ Sample prediction:")
+    print(f" Sample prediction:")
     print(f"  Drug: {list(graph.drugs.keys())[0]}")
     print(f"  Patient: {list(graph.patients.keys())[0]}")
     print(f"  Predicted success probability: {probability:.2%}")
@@ -182,10 +181,8 @@ def quick_demo():
         print(f"  → Model predicts UNSUCCESSFUL treatment")
 
     # Summary
-    print("\n" + "="*70)
-    print("PIPELINE COMPLETE!")
-    print("="*70)
-    print("\nGenerated files:")
+       print("PIPELINE COMPLETE!")
+        print("\nGenerated files:")
     print(f"  1. {graph_file} - Processed drug-patient graph")
     print(f"  2. {model_file} - Trained quantum GNN model")
 
@@ -206,8 +203,7 @@ def load_and_predict_demo():
     """
     Demonstrate loading a saved model and making predictions
     """
-    print("\n" + "="*70)
-    print("LOADING SAVED MODEL FOR PREDICTION")
+       print("LOADING SAVED MODEL FOR PREDICTION")
     print("="*70 + "\n")
 
     graph_file = "drug_patient_graph.pkl"
@@ -249,7 +245,7 @@ def load_and_predict_demo():
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
-    print("✓ Model loaded successfully!\n")
+    print(" Model loaded successfully!\n")
 
     # Make predictions on all drug-patient pairs
     print("Making predictions for all drug-patient combinations...")
@@ -286,15 +282,13 @@ def load_and_predict_demo():
         drug_short = pred['drug'][:40] + "..." if len(pred['drug']) > 40 else pred['drug']
         print(f"{idx:2d}. {pred['probability']:.2%} - {drug_short} → {pred['patient']}")
 
-    print("\n✓ Prediction demo complete!\n")
+    print("\n Prediction demo complete!\n")
     return True
 
 
 if __name__ == "__main__":
-    print("\n" + "="*70)
-    print("DRUG-PATIENT INTERACTION QUANTUM GNN PIPELINE")
-    print("="*70)
-
+       print("DRUG-PATIENT INTERACTION QUANTUM GNN PIPELINE")
+    
     if len(sys.argv) > 1 and sys.argv[1] == "--predict":
         # Load and predict mode
         success = load_and_predict_demo()

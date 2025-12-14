@@ -18,22 +18,22 @@ def test_loader():
     data_path = "/Users/priyanshudey/Code/Qunatum/othercode/data"
     loader = AlternateDataLoader(data_path)
     
-    print(f"✓ Loaded {len(loader.complexes)} complexes")
+    print(f" Loaded {len(loader.complexes)} complexes")
     
     # Test getters
     liganded = loader.get_liganded_complexes()
-    print(f"✓ Liganded: {len(liganded)}")
+    print(f" Liganded: {len(liganded)}")
     
     protein_only = loader.get_protein_only_complexes()
-    print(f"✓ Protein-only: {len(protein_only)}")
+    print(f" Protein-only: {len(protein_only)}")
     
     # Test queries
     pdb_complexes = loader.get_by_pdb_id('4hvb')
-    print(f"✓ Query by PDB (4hvb): {len(pdb_complexes)} complexes")
+    print(f" Query by PDB (4hvb): {len(pdb_complexes)} complexes")
     
     # Test validation
     issues = loader.validate_complexes()
-    print(f"✓ Validation: {sum(len(v) for v in issues.values())} issues found")
+    print(f" Validation: {sum(len(v) for v in issues.values())} issues found")
     
     return loader
 
@@ -50,15 +50,15 @@ def test_adapter(loader):
     
     # Test dataframe generation
     df = adapter.generate_pairs_dataframe()
-    print(f"✓ Generated pairs DataFrame: {len(df)} rows")
+    print(f" Generated pairs DataFrame: {len(df)} rows")
     
     # Test drug lookup
     drug_lookup = adapter.create_drug_lookup()
-    print(f"✓ Created drug lookup: {len(drug_lookup)} unique ligands")
+    print(f" Created drug lookup: {len(drug_lookup)} unique ligands")
     
     # Test protein lookup
     protein_lookup = adapter.create_protein_lookup()
-    print(f"✓ Created protein lookup: {len(protein_lookup)} unique proteins")
+    print(f" Created protein lookup: {len(protein_lookup)} unique proteins")
     
     return adapter
 
@@ -79,9 +79,9 @@ def test_enhanced_loader():
     # Load data
     pdb_metadata, drug_smiles, ligand_lookup = load_data_with_alternate_support(config)
     
-    print(f"✓ Loaded {len(pdb_metadata)} PDB structures")
-    print(f"✓ Loaded {len(drug_smiles)} drugs")
-    print(f"✓ Ligand lookup keys: {len(ligand_lookup)}")
+    print(f" Loaded {len(pdb_metadata)} PDB structures")
+    print(f" Loaded {len(drug_smiles)} drugs")
+    print(f" Ligand lookup keys: {len(ligand_lookup)}")
     
     return config, pdb_metadata, drug_smiles
 
@@ -108,7 +108,7 @@ def test_csv_export(adapter):
         if fpath.exists():
             size_kb = fpath.stat().st_size / 1024
             lines = len(open(fpath).readlines())
-            print(f"✓ {fname}: {size_kb:.1f} KB, {lines} lines")
+            print(f" {fname}: {size_kb:.1f} KB, {lines} lines")
         else:
             print(f"✗ {fname}: NOT FOUND")
             return False
@@ -132,7 +132,7 @@ def test_dataset_creation(config, pdb_metadata, drug_smiles):
         negatives_per_positive=config['sampling']['negatives_per_positive']
     )
     
-    print(f"✓ Created dataset with {len(dataset.pairs)} pairs")
+    print(f" Created dataset with {len(dataset.pairs)} pairs")
     
     # Test split
     train_pairs, val_pairs, test_pairs = dataset.split(
@@ -141,9 +141,9 @@ def test_dataset_creation(config, pdb_metadata, drug_smiles):
         seed=config['sampling']['scaffold_seed']
     )
     
-    print(f"✓ Train split: {len(train_pairs)} pairs")
-    print(f"✓ Val split: {len(val_pairs)} pairs")
-    print(f"✓ Test split: {len(test_pairs)} pairs")
+    print(f" Train split: {len(train_pairs)} pairs")
+    print(f" Val split: {len(val_pairs)} pairs")
+    print(f" Test split: {len(test_pairs)} pairs")
     
     return True
 
@@ -166,7 +166,7 @@ def test_cli_commands():
     )
     
     if result.returncode == 0:
-        print("✓ CLI query command works")
+        print(" CLI query command works")
     else:
         print(f"✗ CLI query failed: {result.stderr}")
         return False
@@ -176,10 +176,8 @@ def test_cli_commands():
 
 def main():
     """Run all tests."""
-    print("\n" + "="*70)
-    print("ALTERNATE DATA SOURCE INTEGRATION TEST SUITE")
-    print("="*70)
-    
+       print("ALTERNATE DATA SOURCE INTEGRATION TEST SUITE")
+        
     try:
         # Test 1: Loader
         loader = test_loader()
@@ -203,10 +201,8 @@ def main():
             return 1
         
         # Summary
-        print("\n" + "="*70)
-        print("ALL TESTS PASSED ✓")
-        print("="*70)
-        print("\nNext steps:")
+               print("ALL TESTS PASSED ")
+                print("\nNext steps:")
         print("1. Review exports in outputs/test_exports/")
         print("2. Update configs/default.yaml with your data path")
         print("3. Run: python run_pipeline.py --config configs/test_alternate.yaml")

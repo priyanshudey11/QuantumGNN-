@@ -83,7 +83,7 @@ Examples:
         adapter.save_pairs_csv(str(output_dir / "complexes.csv"))
         adapter.save_drug_lookup_csv(str(output_dir / "drug_lookup.csv"))
         adapter.save_protein_lookup_csv(str(output_dir / "protein_lookup.csv"))
-        print("✓ Export complete")
+        print(" Export complete")
 
     # Query by PDB
     if args.pdb:

@@ -131,7 +131,7 @@ class IBMQuantumInteractionLayer(nn.Module):
                     print(f"  Continuing with default service configuration...")
 
             self.backend = self.service.backend(ibm_backend)
-            print(f"✓ Connected to IBM backend: {self.backend.name}")
+            print(f" Connected to IBM backend: {self.backend.name}")
             print(f"  Status: {self.backend.status().status_msg}")
             print(f"  Qubits: {self.backend.num_qubits}")
             print(f"  Pending jobs: {self.backend.status().pending_jobs}")
@@ -150,7 +150,7 @@ class IBMQuantumInteractionLayer(nn.Module):
             shots=8192  # Number of shots for measurement
         )
 
-        print(f"✓ PennyLane device initialized with IBM backend")
+        print(f" PennyLane device initialized with IBM backend")
 
         # Define Quantum Node
         @qml.qnode(self.dev, interface='torch', diff_method='parameter-shift')
@@ -203,18 +203,15 @@ class LigandPocketQGNN_IBM(nn.Module):
         self.pocket_encoder = PocketMLP(pocket_in_dim, hidden_dim, self.half_dim)
 
         if use_quantum:
-            print("\n" + "="*70)
-            print("IBM QUANTUM BACKEND CONFIGURATION")
-            print("="*70)
-            self.interaction = IBMQuantumInteractionLayer(
+                       print("IBM QUANTUM BACKEND CONFIGURATION")
+                        self.interaction = IBMQuantumInteractionLayer(
                 n_qubits,
                 n_qlayers,
                 ibm_backend=ibm_backend,
                 use_session=use_session,
                 instance=instance
             )
-            print("="*70)
-        else:
+                    else:
             # Classical fallback
             self.interaction = nn.Sequential(
                 nn.Linear(n_qubits, hidden_dim),
@@ -222,7 +219,7 @@ class LigandPocketQGNN_IBM(nn.Module):
                 nn.Linear(hidden_dim, 1),
                 nn.Sigmoid()
             )
-            print("✓ Using classical MLP for interaction layer")
+            print(" Using classical MLP for interaction layer")
 
     def forward(self, x, edge_index, batch, pocket_vec):
         # Encode Ligand

@@ -23,7 +23,7 @@ def validate_setup():
     for module_name, display_name in checks.items():
         try:
             __import__(module_name)
-            print(f"✓ {display_name}")
+            print(f" {display_name}")
         except ImportError:
             print(f"✗ {display_name} (not installed)")
             all_ok = False
@@ -50,7 +50,7 @@ def validate_data_structure():
     all_ok = True
     for dir_path in required_dirs:
         if Path(dir_path).exists():
-            print(f"✓ {dir_path}/")
+            print(f" {dir_path}/")
         else:
             print(f"✗ {dir_path}/ (missing)")
             all_ok = False
@@ -62,7 +62,7 @@ def validate_data_structure():
     
     for file_path in required_files:
         if Path(file_path).exists():
-            print(f"✓ {file_path}")
+            print(f" {file_path}")
         else:
             print(f"✗ {file_path} (missing)")
             all_ok = False
@@ -95,7 +95,7 @@ def test_smiles_parsing():
             try:
                 graph = smiles_to_graph(smiles)
                 if graph is not None:
-                    print(f"✓ {name}: {graph.num_nodes} atoms")
+                    print(f" {name}: {graph.num_nodes} atoms")
                     successes += 1
                 else:
                     print(f"✗ {name}: invalid SMILES")
@@ -129,7 +129,7 @@ def test_pdb_parsing():
             try:
                 structure = load_pdb_structure(str(pdb_file))
                 if structure:
-                    print(f"✓ {pdb_file.name}")
+                    print(f" {pdb_file.name}")
                 else:
                     print(f"✗ {pdb_file.name}: failed to parse")
             except Exception as e:
@@ -165,7 +165,7 @@ def test_model_creation():
         try:
             model = DrugProteinInteractionModel(test_config)
             n_params = sum(p.numel() for p in model.parameters())
-            print(f"✓ Full model: {n_params:,} parameters")
+            print(f" Full model: {n_params:,} parameters")
         except Exception as e:
             print(f"✗ Full model: {e}")
             return False
@@ -174,7 +174,7 @@ def test_model_creation():
         try:
             model = ClassicalOnlyModel(test_config)
             n_params = sum(p.numel() for p in model.parameters())
-            print(f"✓ Classical model: {n_params:,} parameters")
+            print(f" Classical model: {n_params:,} parameters")
         except Exception as e:
             print(f"✗ Classical model: {e}")
             return False

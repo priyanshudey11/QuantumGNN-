@@ -74,8 +74,8 @@ class Pipeline:
         )
         
         self.protein_ids = sorted(list(self.pdb_metadata.keys()))
-        print(f"✓ Loaded {len(self.protein_ids)} proteins")
-        print(f"✓ Loaded {len(self.drug_smiles)} drugs")
+        print(f" Loaded {len(self.protein_ids)} proteins")
+        print(f" Loaded {len(self.drug_smiles)} drugs")
 
         # Create positive pairs from ligand_lookup
         positive_pairs = []
@@ -95,7 +95,7 @@ class Pipeline:
                         binding_site = self.pdb_metadata[pdb_id_upper].get('binding_site', 'unknown')
                         positive_pairs.append((smiles, pdb_id_upper, binding_site))
 
-        print(f"✓ Created {len(positive_pairs)} positive pairs from ligand lookup")
+        print(f" Created {len(positive_pairs)} positive pairs from ligand lookup")
 
         # Create dataset
         self.dataset = DrugProteinDataset(
@@ -113,7 +113,7 @@ class Pipeline:
             seed=self.config['sampling']['scaffold_seed']
         )
         
-        print(f"✓ Train: {len(self.train_pairs)}, Val: {len(self.val_pairs)}, Test: {len(self.test_pairs)}")
+        print(f" Train: {len(self.train_pairs)}, Val: {len(self.val_pairs)}, Test: {len(self.test_pairs)}")
     
     def get_graphs(self, drug_id: str, protein_id: str):
         """Load graphs for a pair."""
@@ -187,7 +187,7 @@ class Pipeline:
         
         # Count parameters
         n_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"✓ Model created ({n_params:,} parameters)")
+        print(f" Model created ({n_params:,} parameters)")
     
     def train_epoch(self):
         """Train one epoch."""
@@ -301,7 +301,7 @@ class Pipeline:
                     print(f"Early stopping at epoch {epoch+1}")
                     break
         
-        print("✓ Training complete")
+        print(" Training complete")
     
     def evaluate(self):
         """Evaluate on test set."""
@@ -347,7 +347,7 @@ class Pipeline:
         with open(report_path, 'w') as f:
             f.write(report)
         
-        print(f"✓ Results saved to {self.output_dir}")
+        print(f" Results saved to {self.output_dir}")
     
     def run(self):
         """Run full pipeline."""

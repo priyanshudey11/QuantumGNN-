@@ -1,10 +1,3 @@
-"""
-Parallel Quantum Layer using ThreadPoolExecutor for multi-core quantum simulation.
-
-This module provides a drop-in replacement for the standard QuantumInteractionLayer
-that utilizes ALL CPU cores for parallel batch processing.
-"""
-
 import torch
 import torch.nn as nn
 import pennylane as qml
@@ -13,13 +6,6 @@ import os
 
 
 class ParallelQuantumInteractionLayer(nn.Module):
-    """
-    Parallel quantum circuit evaluation using threading.
-
-    PennyLane Lightning releases the GIL during C++ simulation, so ThreadPoolExecutor
-    gives TRUE parallelism across CPU cores.
-    """
-
     def __init__(self, n_qubits, n_layers, device_name='lightning.qubit'):
         super().__init__()
         self.n_qubits = n_qubits
@@ -36,12 +22,12 @@ class ParallelQuantumInteractionLayer(nn.Module):
         n_workers = os.cpu_count()
         self._executor = ThreadPoolExecutor(max_workers=n_workers)
 
-        print(f"✓ Parallel Quantum layer created")
+        print(f"  Parallel Quantum layer created")
         print(f"  Qubits: {n_qubits}, Layers: {n_layers}, Device: {device_name}")
-        print(f"  🚀 Using {n_workers} worker threads for parallel evaluation")
+        print(f"  Using {n_workers} worker threads for parallel evaluation")
 
     def _lazy_init(self):
-        """Initialize quantum circuit on first use."""
+        # Initialize quantum circuit on first use.
         if self._initialized:
             return
 
@@ -55,7 +41,7 @@ class ParallelQuantumInteractionLayer(nn.Module):
             self._dev = qml.device(self.device_name, wires=self.n_qubits)
         except Exception as e:
             fallback = 'lightning.qubit'
-            print(f"⚠ Warning: {self.device_name} not available, using {fallback}")
+            print(f" Warning: {self.device_name} not available, using {fallback}")
             self._dev = qml.device(fallback, wires=self.n_qubits)
 
         # Define quantum circuit
@@ -73,18 +59,11 @@ class ParallelQuantumInteractionLayer(nn.Module):
         )
 
         self._initialized = True
-        print(f"  ✓ Quantum circuit initialized with {n_threads} OpenMP threads")
+        print(f" Quantum circuit initialized with {n_threads} OpenMP threads")
 
     def forward(self, x):
-        """
-        Forward pass with parallel batch evaluation.
 
-        Args:
-            x: torch.Tensor of shape (batch_size, n_qubits)
-
-        Returns:
-            torch.Tensor of shape (batch_size, 1)
-        """
+        # Forward pass with parallel batch evaluation.
         self._lazy_init()
 
         batch_size = x.shape[0]
@@ -121,18 +100,18 @@ class ParallelQuantumInteractionLayer(nn.Module):
         return outputs.unsqueeze(1) if outputs.dim() == 1 else outputs
 
     def state_dict(self, *args, **kwargs):
-        """Override state_dict to handle lazy initialization."""
+        # Override state_dict to handle lazy initialization.
         if not self._initialized:
             self._lazy_init()
         return super().state_dict(*args, **kwargs)
 
     def load_state_dict(self, state_dict, *args, **kwargs):
-        """Override load_state_dict to handle lazy initialization."""
+        # Override load_state_dict to handle lazy initialization.
         if not self._initialized:
             self._lazy_init()
         return super().load_state_dict(state_dict, *args, **kwargs)
 
     def __del__(self):
-        """Clean up thread pool on deletion."""
+        # Clean up thread pool on deletion.
         if hasattr(self, '_executor'):
             self._executor.shutdown(wait=False)

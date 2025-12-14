@@ -188,7 +188,7 @@ if 'JAVA_HOME' not in os.environ:
   
    if java_home:
        os.environ['JAVA_HOME'] = java_home
-       print(f"✓ JAVA_HOME automatically set to: {java_home}")
+       print(f" JAVA_HOME automatically set to: {java_home}")
    else:
        print("JAVA NOT FOUND - INSTALLATION REQUIRED")
        print("\nPySpark requires Java (JDK 17 recommended). Please install it:")
@@ -201,7 +201,7 @@ if 'JAVA_HOME' not in os.environ:
            "Java is not installed. Please install Java and restart the notebook."
        )
 else:
-   print(f"✓ JAVA_HOME already set: {os.environ['JAVA_HOME']}")
+   print(f" JAVA_HOME already set: {os.environ['JAVA_HOME']}")
 
 
 # Verify Java is working
@@ -209,7 +209,7 @@ try:
    result = subprocess.run(['java', '-version'],
                          capture_output=True, text=True, timeout=5)
    version_output = result.stderr.split('\n')[0]  # Java version goes to stderr
-   print(f"✓ Java version: {version_output}")
+   print(f" Java version: {version_output}")
   
    # Check if we're using the right Java version
    if 'JAVA_HOME' in os.environ:
@@ -218,7 +218,7 @@ try:
            result_home = subprocess.run([java_executable, '-version'],
                                       capture_output=True, text=True, timeout=5)
            version_home = result_home.stderr.split('\n')[0]
-           print(f"✓ JAVA_HOME Java version: {version_home}")
+           print(f" JAVA_HOME Java version: {version_home}")
 except Exception as e:
    print(f"⚠️  Warning: Could not verify Java installation: {e}")
 
@@ -416,7 +416,7 @@ if USE_QUANTUM:
    print("   Quantum circuits are not easily parallelizable")
    print("   Consider USE_QUANTUM=False for distributed training")
 else:
-   print("\n✓ Classical mode")
+   print("\n Classical mode")
 
 
 # %%
@@ -483,7 +483,7 @@ def evaluate(model, criterion, loader, device):
    return {'loss': avg_loss, 'accuracy': accuracy, 'auc': auc}
 
 
-print("\n✓ Training functions defined")
+print("\n Training functions defined")
 
 
 
@@ -609,20 +609,20 @@ print("Saving Results")
 # Save model state
 model_path = os.path.join(SAVE_DIR, f"{EXPERIMENT_NAME}_model.pt")
 torch.save(model.state_dict(), model_path)
-print(f"✓ Model saved: {model_path}")
+print(f" Model saved: {model_path}")
 
 
 # Save graph
 graph_path = os.path.join(SAVE_DIR, f"{EXPERIMENT_NAME}_graph.pkl")
 processor.save_graph(graph_path)
-print(f"✓ Graph saved: {graph_path}")
+print(f" Graph saved: {graph_path}")
 
 
 # Save training history
 from drug_patient_qgnn import save_training_history
 history_path = os.path.join(SAVE_DIR, f"{EXPERIMENT_NAME}_history.json")
 save_training_history(history, history_path)
-print(f"✓ History saved: {history_path}")
+print(f" History saved: {history_path}")
 
 
 # Save configuration
@@ -646,4 +646,4 @@ config = {
 config_path = os.path.join(SAVE_DIR, f"{EXPERIMENT_NAME}_config.json")
 with open(config_path, 'w') as f:
    json.dump(config, f, indent=2)
-print(f"✓ Config saved: {config_path}")
+print(f" Config saved: {config_path}")

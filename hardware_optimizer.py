@@ -374,9 +374,7 @@ def optimize_for_hardware(hw_info):
 
 def print_hardware_info(hw_info, config):
     # Pretty print detected hardware and configuration.
-    print(f"\n{'='*70}")
     print(f"HARDWARE DETECTED")
-    print(f"{'='*70}")
     print(f"Platform:     {hw_info['platform']}")
     print(f"CPU:          {hw_info['cpu_brand']}")
     print(f"CPU Vendor:   {hw_info['cpu_vendor'].upper()}")
@@ -384,9 +382,7 @@ def print_hardware_info(hw_info, config):
     print(f"Device:       {hw_info['device_name']}")
     print(f"Memory:       {hw_info['memory_gb']:.1f} GB")
     print(f"Capability:   {hw_info['compute_capability']}")
-    print(f"{'='*70}")
     print(f"AUTO-OPTIMIZED CONFIGURATION")
-    print(f"{'='*70}")
     print(f"Batch Size:   {config['batch_size']}")
     print(f"Workers:      {config['num_workers']}")
     print(f"Prefetch:     {config['prefetch_factor']}")

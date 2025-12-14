@@ -130,7 +130,7 @@ class QuantumInteractionLayer(nn.Module):
         print(f"  Qubits: {n_qubits}, Layers: {n_layers}, Device: {device_name}")
 
     def _lazy_init(self):
-        """Initialize quantum circuit on first use (makes it picklable for DataLoader workers)."""
+      # Initialize quantum circuit on first use (makes it picklable for DataLoader workers).
         if self._initialized:
             return
 
@@ -211,7 +211,7 @@ class LigandPocketQGNN(nn.Module):
         if use_quantum:
             if use_parallel:
                 # Use parallel quantum layer for multi-core processing
-                from .quantum_parallel import ParallelQuantumInteractionLayer
+                from quantum_parallel import ParallelQuantumInteractionLayer
                 self.interaction = ParallelQuantumInteractionLayer(
                     n_qubits, n_qlayers, device_name=quantum_device
                 )

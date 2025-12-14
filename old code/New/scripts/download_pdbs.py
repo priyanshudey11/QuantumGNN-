@@ -14,7 +14,7 @@ def download_pdb(pdb_id: str, output_dir: str = "data/pdb"):
     output_path = Path(output_dir) / f"{pdb_id}.pdb"
     
     if output_path.exists():
-        print(f"✓ {pdb_id}.pdb already exists")
+        print(f" {pdb_id}.pdb already exists")
         return True
     
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
@@ -22,7 +22,7 @@ def download_pdb(pdb_id: str, output_dir: str = "data/pdb"):
     try:
         print(f"Downloading {pdb_id}...", end=" ")
         urllib.request.urlretrieve(url, output_path)
-        print(f"✓ Saved to {output_path}")
+        print(f" Saved to {output_path}")
         return True
     except Exception as e:
         print(f"✗ Failed: {e}")

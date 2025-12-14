@@ -1,3 +1,53 @@
+
+## Quick Setup 
+
+### Step 1: Install Dependencies
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/QuantumGNN.git
+cd QuantumGNN
+
+# Create a fresh Python environment
+conda create -n quantum python=3.11 -y
+conda activate quantum
+
+# Install PyTorch (choose one based on your system)
+# For CPU only:
+pip install torch torchvision torchaudio
+
+# For NVIDIA GPU (CUDA 11.8):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For macOS (Apple Silicon):
+pip install torch torchvision torchaudio
+
+# Install remaining dependencies
+pip install -r requirements.txt
+```
+
+### Step 2: Get Sample Data
+
+For a quick test, the code includes a small sample mode that uses only 50 protein structures:
+
+```python
+# This is already configured in test.ipynb
+processor.load_data(max_samples=50)  # Fast: ~10 seconds, 728 interactions
+```
+
+To use the full CDPPILBP dataset (optional, for production use):
+
+```bash
+# Download
+wget https://zenodo.org/records/10805580/files/CDPPILBP.tar.gz
+
+# Extract (90 GB uncompressed)
+tar -xzf CDPPILBP.tar.gz
+
+# Update data path in test.ipynb
+DATA_DIR = "/path/to/extracted/CDPPILBP"
+```
+
 # Ligand-Pocket QGNN: Hybrid Quantum-Classical Graph Neural Network for Drug-Protein Interaction Prediction
 
 A research implementation of a hybrid quantum-classical graph neural network for predicting ligand-pocket binding interactions in drug discovery. This project provides a complete methodology for constructing, training, and evaluating QGNN architectures on molecular data with comprehensive hardware optimization.

@@ -1,148 +1,129 @@
-# Ligand-Pocket QGNN: Quantum-Enhanced Binding Affinity Prediction
+# Ligand-Pocket QGNN: Hybrid Quantum-Classical Graph Neural Network for Drug-Protein Interaction Prediction
 
-**Ligand-Pocket QGNN** is a hybrid Quantum-Classical Graph Neural Network designed to predict the binding affinity betI en drug ligands and protein binding pockets. It leverages the expressive poI r of Quantum Machine Learning (QML) to model complex molecular interactions, comparing performance directly against classical counterparts.
-
----
-
-## Key Features
-
-*   **Hybrid Architecture:** Combines classical GCNs (for ligands) and MLPs (for protein pockets) with a Variational Quantum Circuit (VQC) interaction layer.
-*   **Hardware Acceleration:**
-    *   **Apple Silicon (MPS):** Custom parallel processing implementation for PennyLane on Mac GPUs.
-    *   **NVIDIA (CUDA):** Full support for `pennylane-lightning-gpu`.
-    *   **IBM Quantum:** Direct integration with IBM Quantum hardware via `qiskit-ibm-runtime`.
-*   **Parallel Processing:** Custom threaded execution layer (`ParallelQuantumInteractionLayer`) to maximize CPU/GPU throughput for quantum simulations.
-*   **Comprehensive Benchmarking:** Dedicated notebooks for comparing Quantum vs. Classical performance metrics (AUC, Accuracy, F1).
+A research implementation of a hybrid quantum-classical graph neural network for predicting ligand-pocket binding interactions in drug discovery. This project provides a complete methodology for constructing, training, and evaluating QGNN architectures on molecular data with comprehensive hardware optimization.
 
 ---
 
-## System Architecture
+## Overview
 
-The model consists of three main components:
+### Purpose
 
-1.  **Ligand Encoder (Classical GNN):**
-    *   Input: Molecular graph (atoms & bonds).
-    *   Layers: 2x Graph Convolutional Layers (GCN) + Global Pooling.
-    *   Output: `n`-dimensional latent vector.
+This framework implements a hybrid quantum-classical architecture that combines:
+- Classical Graph Neural Networks for ligand molecular structure encoding
+- Classical Multi-Layer Perceptrons for protein pocket feature extraction
+- Variational Quantum Circuits for interaction modeling
 
-2.  **Pocket Encoder (Classical MLP):**
-    *   Input: 3D structural descriptors of the protein pocket.
-    *   Output: `n`-dimensional latent vector.
+The system enables direct comparison between quantum and classical interaction mechanisms while maintaining identical preprocessing, encoding, and evaluation pipelines.
 
-3.  **Interaction Layer (The "Quantum Brain"):**
-    *   **Input:** Concatenated Ligand + Pocket vectors.
-    *   **Circuit:** Angle Embedding $\to$ Strongly Entangling Layers $\to$ Pauli-Z Measurement.
-    *   **Output:** Binding probability (0-1).
+### Key Capabilities
+
+- **Hardware-Agnostic Execution**: Automatic detection and optimization for CUDA (NVIDIA), MPS (Apple Silicon), and CPU platforms
+- **Quantum Circuit Simulation**: 6-qubit, 2-layer variational quantum circuits with angle encoding and strongly entangling layers
+- **Parallel Processing**: Multi-threaded quantum circuit evaluation for improved training throughput on multi-core systems
+- **Checkpoint Management**: Patience-aware training resumption with automatic architecture mismatch handling
+- **Comprehensive Evaluation**: Full suite of classification metrics (AUC, accuracy, precision, recall, F1-score)
 
 ---
 
-## How It Works
+## Architecture
 
-The pipeline follows a structured data flow to predict binding affinity:
+### System Components
 
-1.  **Data Ingestion:**
-    *   **Ligands:** Parsed from MOL2 files into graph structures (Atoms=Nodes, Bonds=Edges).
-    *   **Pockets:** Parsed from PDB files into geometric feature vectors (FPocket descriptors).
+```
+Input Layer
+├── Ligand Processing: MOL2 → Graph (atoms as nodes, bonds as edges)
+└── Pocket Processing: CSV descriptors → Feature vector (19 dimensions)
 
-2.  **Dual-Stream Encoding:**
-    *   The **Ligand Graph** is passed through a GCN, aggregating local atomic features into a global molecular representation.
-    *   The **Pocket Vector** is processed by a classical MLP to extract high-level geometric embeddings.
+Encoding Layer
+├── Ligand Encoder: 2-layer GCN + Global Mean Pooling → 3D latent vector
+└── Pocket Encoder: 3-layer MLP → 3D latent vector
 
-3.  **Quantum Fusion:**
-    *   The two latent vectors are concatenated and normalized.
-    *   This combined vector serves as the input parameters (angles) for the **Variational Quantum Circuit (VQC)**.
-    *   The VQC entangles the features in a high-dimensional Hilbert space.
+Interaction Layer (Switchable)
+├── Quantum: 6-qubit VQC (angle encoding + strongly entangling + measurement)
+└── Classical: 2-layer MLP with ReLU and Sigmoid
 
-4.  **Prediction:**
-    *   A Pauli-Z measurement is performed on the first qubit.
-    *   The expectation value is mapped to a probability score representing the binding likelihood.
+Output Layer
+└── Binary Classification: Binding probability (0-1)
+```
 
-### Architecture Diagram
-```mermaid
-graph TD
-    subgraph Input
-    L[Ligand (MOL2)] --> LG[Ligand Graph]
-    P[Pocket (PDB)] --> PV[Pocket Vector]
-    end
+### Data Flow
 
-    subgraph Classical Encoding
-    LG --> GCN[GCN Encoder]
-    PV --> MLP[MLP Encoder]
-    GCN --> LV[Latent Vector L]
-    MLP --> PVec[Latent Vector P]
-    end
-
-    subgraph Quantum Interaction
-    LV & PVec --> C[Concatenation]
-    C --> VQC[Variational Quantum Circuit]
-    VQC --> M[Measurement]
-    end
-
-    M --> Out([Binding Prob])
+```
+Ligand Graph (N atoms, E edges)     Pocket Features (19-dim vector)
+          ↓                                      ↓
+    LigandGNN (GCN)                        PocketMLP
+          ↓                                      ↓
+    3D embedding                           3D embedding
+          ↓                                      ↓
+          └──────────── Concatenation ──────────┘
+                          ↓
+                    6D combined vector
+                          ↓
+            Normalization: tanh(x) * π
+                          ↓
+          ┌───────────────┴───────────────┐
+          ↓                               ↓
+    Quantum Circuit                  Classical MLP
+    (6Q/2L VQC)                     (64-dim hidden)
+          ↓                               ↓
+    Pauli-Z measurement             Sigmoid activation
+          ↓                               ↓
+          └──────── Binding Score ────────┘
+                    (probability)
 ```
 
 ---
 
 ## Dataset
 
-This project uses the **CDPPILBP (Comprehensive Dataset of Protein-Protein Interactions and Ligand Binding Pockets)** from Zenodo.
+### CDPPILBP: Comprehensive Dataset of Protein-Protein Interactions and Ligand Binding Pockets
 
-### Dataset Information
+**Source**: Institut Pasteur, Paris (Structural Bioinformatics Unit)
+**License**: Creative Commons Attribution 4.0 International (CC BY 4.0)
+**Publication**: Scientific Data, Nature Publishing Group (April 2024)
 
-**Title:** A Comprehensive Dataset of protein-protein interactions and Ligand Binding Pockets for Advancing Drug Discovery
+#### Dataset Statistics
 
-**Source:** Institut Pasteur, Paris, France
-**Published:** November 30, 2023
-**Data Collection Date:** March 17, 2023 (from PDBe)
-**License:** Creative Commons Attribution 4.0 International (CC BY 4.0)
+- 34,475 PDB structures with experimentally determined complexes
+- 23,000 annotated binding pockets with 3D geometric descriptors
+- 3,700 unique proteins spanning 500+ organisms
+- 3,500 distinct ligands (small molecules, drug-like compounds, peptides, cofactors)
+- 11.1 GB compressed (90 GB uncompressed)
 
-**DOI:** [10.5281/zenodo.10805580](https://doi.org/10.5281/zenodo.10805580)
-**Paper DOI:** [10.1038/s41597-024-03233-z](https://doi.org/10.1038/s41597-024-03233-z)
+#### Data Contents
 
-### Dataset Statistics
+Each protein entry includes:
 
-- **~34,475 PDB structures** with protein-protein and protein-ligand complexes
-- **~23,000 binding pockets** with 3D geometric descriptors
-- **~3,700 unique proteins** across 500+ organisms
-- **~3,500 ligands** (small molecules, peptides)
-- **Size:** 11.1 GB (compressed)
+1. **Structural Files**
+   - PDB format coordinates (.pdb, .ent)
+   - Extracted protein-ligand complexes
+   - Interface annotations (6 Angstrom cutoff)
 
-### Dataset Contents
+2. **Pocket Descriptors** (100+ pre-computed features via FPocket)
+   - **Geometric**: Volume, PMI1-3, NPR1-2, radius of gyration, asphericity, spherocity index, eccentricity, inertial shape factor
+   - **Chemical**: Atom type distributions (CZ, CA, O, OD1, OG, N, NZ, DU)
+   - **Spatial**: Distance-binned atom counts (40-120 Angstrom shells)
 
-Each PDB entry includes:
-- Full protein structure files (`.ent`, `.pdb`)
-- Extracted protein-protein complexes
-- Extracted protein-ligand complexes
-- Interface residue annotations (6Å cutoff)
-- Pre-computed 3D pocket descriptors (~100 features):
-  - **Shape descriptors:** Volume, PMI1-3, NPR1-2, Radius of gyration, Asphericity, Eccentricity
-  - **Atom type distributions:** CZ, CA, O, OD1, OG, N, NZ counts
-  - **Spatial features:** Distance-binned atom counts (40-120Å shells)
-- FPocket-generated binding pocket MOL2 files (liganded/unliganded)
+3. **Ligand Structures**
+   - MOL2 format binding pocket files
+   - Both liganded and unliganded states
 
-### Download Instructions
+#### Access and Citation
+
+**Download**: [Zenodo Repository](https://zenodo.org/records/10805580)
+**DOI**: 10.5281/zenodo.10805580
+**MD5 Checksum**: a2ee28e5dea636e2892712609cd4c215
 
 ```bash
-# Download dataset (11.1 GB)
+# Download and verify dataset
 wget https://zenodo.org/records/10805580/files/CDPPILBP.tar.gz
-
-# Or use curl
-curl -O https://zenodo.org/records/10805580/files/CDPPILBP.tar.gz
-
-# Verify checksum (optional)
-md5sum CDPPILBP.tar.gz
-# Expected: a2ee28e5dea636e2892712609cd4c215
-
-# Extract
+md5sum CDPPILBP.tar.gz  # Should match: a2ee28e5dea636e2892712609cd4c215
 tar -xzf CDPPILBP.tar.gz
 ```
 
-### Citation
-
-If you use this dataset, please cite:
-
+**Citation**:
 ```bibtex
-@article{moine-franel2024comprehensive,
+@article{moine2024comprehensive,
   title={A comprehensive dataset of protein-protein interactions and ligand binding pockets for advancing drug discovery},
   author={Moine-Franel, Alexandra and Mareuil, Fabien and Nilges, Michael and Ciambur, Constantin Bogdan and Sperandio, Olivier},
   journal={Scientific Data},
@@ -153,110 +134,363 @@ If you use this dataset, please cite:
   publisher={Nature Publishing Group},
   doi={10.1038/s41597-024-03233-z}
 }
-
-@dataset{moine-franel2023zenodo,
-  author={Moine-Franel, Alexandra and Mareuil, Fabien and Nilges, Michael and Ciambur, Constantin Bogdan and Sperandio, Olivier},
-  title={A Comprehensive Dataset of protein-protein interactions and Ligand Binding Pockets for Advancing Drug Discovery},
-  year={2023},
-  publisher={Zenodo},
-  doi={10.5281/zenodo.10805580},
-  url={https://doi.org/10.5281/zenodo.10805580}
-}
 ```
 
 ---
 
 ## Installation
 
-### Prerequisites
-*   Python 3.10+
-*   Conda (recommended)
+### Requirements
 
-### fast Setup
+- Python 3.10 or higher
+- CUDA 11.7+ (optional, for NVIDIA GPU support)
+- 8 GB RAM minimum (16 GB+ recommended)
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/yourusername/ligand-pocket-qgnn.git
-    ```
+### Setup Instructions
 
-2.  **Create Environment:**
-    ```bash
-    conda create -n quantum python=3.11
-    conda activate quantum
-    ```
+1. **Clone Repository**
+   ```bash
+   git clone https://github.com/yourusername/QuantumGNN.git
+   cd QuantumGNN
+   ```
 
-3.  **Install Dependencies:**
-    ```bash
-    # Install PyTorch (select command for your OS from pytorch.org)
-    pip install torch torchvision torchaudio
-    
-    # Install Project Requirements
-    pip install -r requirements.txt
-    ```
+2. **Create Environment**
+   ```bash
+   conda create -n quantum python=3.11
+   conda activate quantum
+   ```
+
+3. **Install PyTorch**
+
+   Select appropriate command from [pytorch.org](https://pytorch.org/get-started/locally/):
+
+   ```bash
+   # CPU-only
+   pip install torch torchvision torchaudio
+
+   # CUDA 11.8
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+   # macOS (MPS)
+   pip install torch torchvision torchaudio
+   ```
+
+4. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Core Dependencies
+
+- **PyTorch** (2.0+): Deep learning framework
+- **PennyLane** (0.32+): Quantum machine learning library
+- **PyTorch Geometric** (2.3+): Graph neural network extensions
+- **NumPy, Pandas**: Data manipulation
+- **scikit-learn**: Train/test splitting and metrics
+- **tqdm**: Progress bars
 
 ---
 
-## Usage
+## Quick Start
 
-### 1. Training & Comparison
-Run the main comparison notebook to train both Quantum and Classical models on your local machine:
-*   Open `compare_clean.ipynb` or `compare_ligand_pocket_quantum_vs_classical.ipynb`.
-*   The notebook will automatically detect your hardware (CPU, CUDA, MPS) and optimize settings.
+### Basic Training Example
 
-### 2. Running on IBM Quantum
-To run on real quantum hardware or IBM simulators:
-*   Open `compare_ligand_pocket_quantum_vs_classical_IBM.ipynb`.
-*   Configure your IBM Quantum Token within the notebook.
+```python
+from hardware_optimizer import setup_environment
+from data import LigandPocketDataProcessor, LigandPocketDataset, collate_fn
+from model import LigandPocketQGNN
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
 
-### 3. Hardware Optimization
-The system includes `hardware_optimizer.py` which automatically configures:
-*   `num_workers` for DataLoader.
-*   `batch_size` based on VRAM/RAM.
-*   PennyLane device backend (`lightning.qubit`, `default.qubit`, etc.).
+# 1. Auto-detect and optimize for hardware
+hw_info, config = setup_environment()
+
+# 2. Load data
+processor = LigandPocketDataProcessor(data_dir="/path/to/CDPPILBP", seed=42)
+processor.load_data(max_samples=None)  # Load all data
+interactions = processor.get_dataset()
+
+# 3. Split data (80/10/10)
+train_ints, temp_ints = train_test_split(interactions, test_size=0.2, random_state=42)
+val_ints, test_ints = train_test_split(temp_ints, test_size=0.5, random_state=42)
+
+# 4. Create datasets and dataloaders
+train_dataset = LigandPocketDataset(processor, train_ints)
+val_dataset = LigandPocketDataset(processor, val_ints)
+
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=config['batch_size'],
+    shuffle=True,
+    collate_fn=collate_fn,
+    num_workers=config['num_workers'],
+    pin_memory=config['pin_memory'],
+    persistent_workers=True,
+    prefetch_factor=config['prefetch_factor']
+)
+
+# 5. Initialize model
+quantum_model = LigandPocketQGNN(
+    ligand_in_dim=10,          # Atom type one-hot encoding
+    pocket_in_dim=19,          # Pocket geometric + atom count features
+    hidden_dim=64,             # GNN/MLP hidden dimension
+    n_qubits=6,                # Quantum circuit width
+    n_qlayers=2,               # Quantum circuit depth
+    use_quantum=True,          # True for QGNN, False for classical
+    quantum_device=config['quantum_device'],
+    use_parallel=True          # Enable multi-threaded quantum evaluation
+)
+
+# 6. Train (see test.ipynb for full training loop)
+from train import train_model
+history, best_auc = train_model(
+    quantum_model, train_loader, val_loader,
+    model_name="quantum",
+    device=hw_info['device'],
+    resume=True  # Automatically resume from checkpoint if available
+)
+```
+
+### Running Comparison Experiments
+
+The project includes Jupyter notebooks for comparative evaluation:
+
+1. **Local Simulation**: `test.ipynb`
+   - Trains both quantum and classical models
+   - Automatic hardware optimization
+   - Generates performance comparison plots
+
+2. **IBM Quantum Hardware**: `test_ibm.ipynb`
+   - Integrates with IBM Quantum via qiskit-ibm-runtime
+   - Supports Qiskit Runtime Estimator and Sampler primitives
+   - Requires IBM Quantum account and API token
+
+---
+
+## Model Configuration
+
+### Quantum Circuit Design
+
+**Architecture**: 6-qubit, 2-layer Variational Quantum Circuit (VQC)
+
+**Components**:
+1. **Encoding**: Angle embedding via RY rotations
+   - Maps 6D classical vector to quantum state: |ψ⟩ = ⊗ RY(θᵢ)|0⟩
+
+2. **Ansatz**: Strongly entangling layers
+   - Per layer: Single-qubit rotations (RZ-RY-RZ) + CNOT entanglers
+   - Entanglement pattern: Full connectivity via successive CX gates
+
+3. **Measurement**: Pauli-Z expectation value on qubit 0
+   - Output ∈ [-1, 1], mapped to [0, 1] via linear transformation
+
+**Trainable Parameters**: 36 (2 layers × 6 qubits × 3 rotation angles)
+
+**Gradient Computation**: Parameter-shift rule (exact gradients for quantum gates)
+
+### Classical Baseline
+
+**Architecture**: 2-layer MLP
+
+```
+Input (6D) → Linear(64) → ReLU → Linear(1) → Sigmoid → Output
+```
+
+**Trainable Parameters**: 513 (6×64 + 64 + 64×1 + 1)
+
+### Hardware Optimization
+
+The `hardware_optimizer.py` module automatically configures:
+
+| Hardware | Batch Size | Workers | Prefetch | Quantum Backend |
+|----------|------------|---------|----------|-----------------|
+| NVIDIA A100/H100 | 4096 | 12 | 6 | lightning.gpu |
+| NVIDIA RTX 4090 | 2048 | 8 | 4 | lightning.gpu |
+| Apple M4 | 1536 | 10 | 5 | lightning.qubit |
+| Apple M3 | 1024 | 8 | 4 | lightning.qubit |
+| AMD EPYC | 3072 | 16 | 8 | lightning.qubit |
+| Intel Xeon | 2048 | 12 | 6 | lightning.qubit |
+
+Batch size and worker count are further adjusted based on available memory.
+
+---
+
+## Training Features
+
+### Checkpoint Management
+
+- **Automatic Saving**: Best model saved based on validation AUC
+- **Patience Tracking**: Early stopping after 15 epochs without improvement
+- **Resume Support**: Automatically resume from last checkpoint with `resume=True`
+- **Architecture Mismatch Handling**: Loads compatible weights with `strict=False`, initializes incompatible layers randomly
+- **Auto-Restart**: If patience exhausted, automatically starts fresh training
+
+### Optimization
+
+- **Optimizer**: Adam (learning rate: 1e-3)
+- **Loss Function**: Binary Cross-Entropy
+- **Gradient Clipping**: max_norm=1.0 for stability
+- **Learning Rate Scheduling**: ReduceLROnPlateau (factor=0.5, patience=5)
+- **Early Stopping**: Monitors validation AUC with patience=15
+
+### Metrics
+
+**Training**: Loss, Accuracy
+**Validation**: Loss, Accuracy, AUC, Precision, Recall, F1-score
+**Primary Metric**: AUC (threshold-independent, robust to class imbalance)
+
+---
+
+## Performance Considerations
+
+### Computational Requirements
+
+**Quantum Model**:
+- Training time: ~2-5 seconds per epoch (batch_size=1024, 728 samples, Apple M4)
+- Memory: ~2-4 GB (model + data + quantum simulation overhead)
+- Bottleneck: Quantum circuit evaluation (scales exponentially with qubits in classical simulation)
+
+**Classical Model**:
+- Training time: ~0.5-1 second per epoch (same configuration)
+- Memory: ~1-2 GB
+- Significantly faster per epoch, but quantum may achieve comparable performance with fewer parameters
+
+### Parallelization
+
+**ParallelQuantumInteractionLayer**:
+- Evaluates quantum circuits concurrently across CPU threads
+- Speedup: ~Nx where N = CPU core count (for batch_size > cores)
+- Automatically disabled for batch_size ≤ 2 to avoid threading overhead
+
+**DataLoader Multi-Processing**:
+- Persistent workers avoid repeated process spawning
+- Prefetching overlaps data loading with GPU computation
+- Optimal worker count: 4-12 depending on CPU cores
 
 ---
 
 ## Project Structure
 
-```plaintext
-├── ligand_pocket_qgnn/          # Main Package
-│   ├── model.py                 # Core QGNN Architecture (Local Simulation)
-│   ├── model_ibm.py             # QGNN Architecture (IBM Runtime Integration)
-│   ├── quantum_parallel.py      # Thread-Parallel Quantum Layer
-│   ├── data.py                  # Data Loading & Graph Processing
-│   └── hardware_optimizer.py    # Auto-configuration Utility
-│   └── test.ipynb               # Main Training & Benchmarking Notebook
-│   └── requirements.txt         # Project Dependencies
-└── README.md                    # This file
 ```
+QuantumGNN/
+├── data.py                          # Data loading and graph construction
+├── model.py                         # QGNN and classical GNN architectures
+├── model_ibm.py                     # IBM Quantum hardware integration
+├── quantum_parallel.py              # Multi-threaded quantum layer
+├── hardware_optimizer.py            # Auto hardware detection and config
+├── test.ipynb                       # Main training and comparison notebook
+├── test_ibm.ipynb                   # IBM Quantum hardware notebook
+├── requirements.txt                 # Python dependencies
+├── README.md                        # This file
+├── WIKI.md                          # Comprehensive technical documentation
+├── PAPER_CODE_ALIGNMENT.md          # Analysis of paper vs. code correspondence
+└── ligand_pocket_comparison_results/
+    ├── quantum_best.pt              # Best quantum model checkpoint
+    ├── quantum_history.json         # Training history (quantum)
+    ├── classical_best.pt            # Best classical model checkpoint
+    └── classical_history.json       # Training history (classical)
+```
+
+---
+
+## Documentation
+
+- **[WIKI.md](WIKI.md)**: Comprehensive technical documentation covering:
+  - Module-level API documentation
+  - Data pipeline details
+  - Model architecture deep-dive
+  - Hardware optimization strategies
+  - Training workflow and checkpoint management
+  - Troubleshooting guide
+
+- **[PAPER_CODE_ALIGNMENT.md](PAPER_CODE_ALIGNMENT.md)**: Detailed analysis of correspondence between research paper claims and code implementation
 
 ---
 
 ## Technical Highlights
 
-### Solving the "MPS Bottleneck"
-Running quantum simulations on Apple Silicon (MPS) is traditionally challenging due to lack of native sparse tensor support and thread safety issues in simulators.
-*   **Solution:** I implemented `ParallelQuantumInteractionLayer` which intelligently offloads quantum circuit evaluation to CPU threads while keeping the rest of the pipeline on the GPU, preventing `AssertionError` crashes and maximizing throughput.
+### MPS (Apple Silicon) Optimization
 
-### IBM Runtime Integration
-Uses `qiskit-ibm-runtime` primitives (`Estimator`, `Sampler`) for efficient session-based execution on IBM hardware, reducing queue times and latency.
+**Challenge**: Apple MPS backend lacks native support for sparse matrix operations and has thread safety constraints in quantum simulators.
+
+**Solution**:
+- GCNLayer automatically falls back to CPU for sparse operations, then moves results back to MPS
+- ParallelQuantumInteractionLayer moves tensors to CPU for thread-safe quantum evaluation, returns to original device
+- Prevents AssertionError crashes while maintaining GPU utilization for other operations
+
+### Quantum Circuit Lazy Initialization
+
+**Problem**: PennyLane quantum devices cannot be pickled for DataLoader multiprocessing.
+
+**Solution**:
+- Defer quantum device creation until first forward pass
+- Enables DataLoader persistent workers without serialization errors
+- Registers nn.Parameter weights after device initialization
+
+### Graph Batching
+
+**Challenge**: Variable-size molecular graphs cannot be stacked into tensors directly.
+
+**Solution**:
+- Concatenate all graphs into a single large graph
+- Shift edge indices by cumulative node offsets to maintain connectivity
+- Track batch assignment vector for graph-level pooling
+- O(1) memory overhead, efficient GPU execution
 
 ---
 
-## Citation
+## Limitations and Known Issues
 
-If you use this code in your research, please cite:
+1. **Scale**: Current implementation tested on subsets (50-1000 protein structures). Full dataset experiments require 32+ GB RAM.
 
-**This Work:**
-> Priyanshu, "Ligand-Pocket QGNN: Exploring Quantum Advantage in Drug Discovery," 2025.
+2. **Quantum Simulation**: 6-qubit circuits simulated classically. Scales exponentially (O(2^n) complexity). Real quantum hardware integration via IBM Quantum available but subject to queue times and device noise.
 
-**Dataset:**
-> Moine-Franel, A., Mareuil, F., Nilges, M., Ciambur, C.B., & Sperandio, O. (2024). A comprehensive dataset of protein-protein interactions and ligand binding pockets for advancing drug discovery. *Scientific Data*, 11, 402. https://doi.org/10.1038/s41597-024-03233-z
+3. **Graph Structure**: Ligand-only graphs. Paper describes bipartite ligand-pocket graphs, not yet implemented.
+
+4. **Feature Set**: Uses 10-dim ligand features (atom types) and 19-dim pocket features (11 geometric + 8 atom counts). Paper describes 100+ pocket descriptors.
+
+5. **Architecture**: Implements GCN (Kipf & Welling), not MPNN-style message passing described in associated paper.
+
+6. **Performance Gap**: Classical model often outperforms quantum in final validation metrics, suggesting shallow quantum circuits (6Q/2L) may be insufficient for this task complexity.
 
 ---
 
-## Acknowledgments
+## Future Work
 
-- **Dataset:** Institut Pasteur (Structural Bioinformatics Unit) for the CDPPILBP dataset
-- **Quantum Computing:** IBM Quantum for hardware access
-- **Frameworks:** PennyLane, PyTorch, PyTorch Geometric
+- [ ] Bipartite graph construction (ligand-pocket edges)
+- [ ] Extended feature extraction (100+ pocket descriptors)
+- [ ] MPNN-style message passing implementation
+- [ ] Multi-qubit measurement (currently measures only qubit 0)
+- [ ] Deeper quantum circuits (4-6 layers) and/or more qubits (8-12)
+- [ ] Hybrid training (classical pre-training + quantum fine-tuning)
+- [ ] Real quantum hardware benchmarking (IBM, IonQ, Rigetti)
+- [ ] Multi-GPU training support (DistributedDataParallel)
+- [ ] Hyperparameter optimization (Ray Tune, Optuna)
+- [ ] Graph attention mechanisms
+- [ ] 3D protein structure encoding (beyond pocket descriptors)
+
+---
+
+
+**Dataset**:
+```bibtex
+@article{moine2024comprehensive,
+  title={A comprehensive dataset of protein-protein interactions and ligand binding
+         pockets for advancing drug discovery},
+  author={Moine-Franel, Alexandra and Mareuil, Fabien and Nilges, Michael and
+          Ciambur, Constantin Bogdan and Sperandio, Olivier},
+  journal={Scientific Data},
+  volume={11},
+  number={1},
+  pages={402},
+  year={2024},
+  publisher={Nature Publishing Group UK London},
+  doi={10.1038/s41597-024-03233-z}
+}
+```
+
+
+
+
+**Version**: 1.0.0
+**Last Updated**: December 14, 2025

@@ -37,7 +37,7 @@ Uses **CDPPILBP** dataset (34k+ protein-ligand structures). Download: [Zenodo](h
 
 ## Documentation
 
-- **[WIKI.md](WIKI.md)**: Complete API documentation and technical details
+- **Go to https://github.com/priyanshudey11/QuantumGNN-/wiki  Complete API documentation and technical details
 
 ---
 

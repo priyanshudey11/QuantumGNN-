@@ -55,20 +55,11 @@ QuantumGNN/
 
 ---
 
-## Citation
 
-```
-Dey, Priyanshu. "A Hybrid Quantum Graph Neural Network Methodology for
-Drug-Protein Interaction Simulation." Pennsylvania State University, 2025.
-```
-
-Dataset: Moine-Franel et al. (2024). [doi:10.1038/s41597-024-03233-z](https://doi.org/10.1038/s41597-024-03233-z)
-
----
 
 ## License
 
-MIT License. CDPPILBP dataset: CC BY 4.0
+
 
 **Author**: Priyanshu Dey | **Email**: pkd5228@psu.edu | **Institution**: Pennsylvania State University
 

@@ -1,0 +1,106 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Training Results & Model Checkpoints
+*_results/
+*_comparison_results/
+*results*/
+saved_models/
+saved_models2/
+checkpoints/
+*.pt
+*.pth
+*_best.pt
+*.ckpt
+
+# Training History & Logs
+*_history.json
+*.log
+logs/
+tensorboard/
+
+# Data & Datasets
+data/
+*.csv
+*.json
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+
+# Plots & Figures
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
+!docs/*.png
+!docs/*.jpg
+!README*.png
+
+# Environment & Config
+.env
+.env.local
+*.ini
+*.cfg
+config.yaml
+config.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+.directory
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Large Files
+*.tar
+*.zip
+*.gz
+*.7z
+*.rar

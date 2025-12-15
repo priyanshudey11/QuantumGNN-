@@ -6,7 +6,7 @@ import os
 
 
 class ParallelQuantumInteractionLayer(nn.Module):
-    def __init__(self, n_qubits, n_layers, device_name='lightning.qubit'):
+    def __init__(self, n_qubits, n_layers, device_name='default.qubit'):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_layers = n_layers
@@ -40,8 +40,8 @@ class ParallelQuantumInteractionLayer(nn.Module):
         try:
             self._dev = qml.device(self.device_name, wires=self.n_qubits)
         except Exception as e:
-            fallback = 'lightning.qubit'
-            print(f" Warning: {self.device_name} not available, using {fallback}")
+            fallback = 'default.qubit'
+            print(f"⚠ Warning: {self.device_name} not available, using {fallback}")
             self._dev = qml.device(fallback, wires=self.n_qubits)
 
         # Define quantum circuit

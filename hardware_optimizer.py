@@ -201,14 +201,14 @@ def optimize_for_hardware(hw_info):
         'num_workers': 4,
         'prefetch_factor': 2,
         'pin_memory': False,
-        'quantum_device': 'lightning.qubit',
+        'quantum_device': 'default.qubit',
         'persistent_workers': True
     }
 
-    # NVIDIA CUDA CONFIGURATIONS 
+    # NVIDIA CUDA CONFIGURATIONS
     if device == 'cuda':
         config['pin_memory'] = True
-        config['quantum_device'] = 'lightning.gpu'
+        config['quantum_device'] = 'default.qubit'
 
         # High-end datacenter GPUs (A100, H100)
         if 'datacenter' in capability or 'hopper' in capability:

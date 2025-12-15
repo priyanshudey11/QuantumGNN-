@@ -21,10 +21,12 @@ from model import LigandPocketQGNN
 
 
 def train_single_config(config_num, hidden_dim, n_qubits, n_qlayers, learning_rate,
-                       data_dir, save_dir, seed=42069, epochs=100,
+                       proc, tr_ints, v_ints, ts_ints, ligand_dim, pocket_dim,
+                       save_dir, seed=42069, epochs=100,
                        early_stopping_patience=15, batch_size=512):
     """
     Train a single hyperparameter configuration.
+    Data is pre-loaded and passed in to avoid redundant I/O.
     Returns dict with results.
     """
     # Set different random seed for each process
@@ -43,23 +45,10 @@ def train_single_config(config_num, hidden_dim, n_qubits, n_qlayers, learning_ra
 
         print(f"[Config {config_num}] Starting: {model_name}")
 
-        # Load data
-        proc = LigandPocketDataProcessor(data_dir, seed=seed)
-        proc.load_data(max_samples=50)
-        ints = proc.get_dataset()
-
-        tr_ints, tmp_ints = train_test_split(ints, test_size=0.2, random_state=seed)
-        v_ints, ts_ints = train_test_split(tmp_ints, test_size=0.5, random_state=seed)
-
+        # Create datasets from pre-loaded data
         train_dataset = LigandPocketDataset(proc, tr_ints)
         val_dataset = LigandPocketDataset(proc, v_ints)
         test_dataset = LigandPocketDataset(proc, ts_ints)
-
-        # Get dimensions
-        sample_ligand = proc.ligands[ints[0].ligand_id]
-        sample_pocket = proc.pockets[ints[0].pocket_id]
-        ligand_dim = sample_ligand.atom_features.shape[1]
-        pocket_dim = sample_pocket.to_vector().shape[0]
 
         # Create dataloaders
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
@@ -215,9 +204,24 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    # Load data once
+    proc = LigandPocketDataProcessor(args.data_dir, seed=42069)
+    proc.load_data(max_samples=50)
+    ints = proc.get_dataset()
+
+    tr_ints, tmp_ints = train_test_split(ints, test_size=0.2, random_state=42069)
+    v_ints, ts_ints = train_test_split(tmp_ints, test_size=0.5, random_state=42069)
+
+    # Get dimensions
+    sample_ligand = proc.ligands[ints[0].ligand_id]
+    sample_pocket = proc.pockets[ints[0].pocket_id]
+    ligand_dim = sample_ligand.atom_features.shape[1]
+    pocket_dim = sample_pocket.to_vector().shape[0]
+
     result = train_single_config(
         args.config_num, args.hidden_dim, args.n_qubits, args.n_qlayers,
-        args.learning_rate, args.data_dir, args.save_dir
+        args.learning_rate, proc, tr_ints, v_ints, ts_ints, ligand_dim, pocket_dim,
+        args.save_dir
     )
 
     print(f"\nFinal result: {result}")
